@@ -1,0 +1,188 @@
+{
+ "caseId": "av-05-water-well-paid-net-45",
+ "keys": {
+  "cop_17120eb00be24fce818e": "wellCloseout"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $2,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 46 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_17120eb00be24fce818e"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_17120eb00be24fce818e",
+    "title": "Well-completion report and permit closeout filing for water-well drilling contractors",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Owners of water-well drilling companies",
+     "reachableChannel": "The six owners who signed service orders by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:17.752Z",
+     "offerScope": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+     "priceCents": 45000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "water-well drilling",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 45000,
+      "currency": "USD",
+      "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six owners who signed service orders by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 2700 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 2700 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "46 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of water-well drilling companies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six drilling contractors signed service orders at $450 per well closeout filing (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "46 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:56:16.177Z"
+ }
+}

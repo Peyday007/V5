@@ -1,0 +1,601 @@
+{
+ "caseId": "aw-01-small-target-owner-hours",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Paid AI-training tasks on DataAnnotation (owner's own hours)\", \"Direct-sold AI-drafted blog content package to local busines\", \"Upwork fixed-price AI-assisted blog articles for small busin\", \"Fiverr AI-assisted article-writing gig\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 80× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Direct-sold AI-drafted blog content package to local busines\" needs [figure withheld] and keeps [figure withheld], 140× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_7f7ce1a008a040ed94cd",
+   "cop_fad4e9c12fbf49fdbb60",
+   "cop_bf8ba8a7420b49209f05",
+   "cop_467db7644f1e4d1db134"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"Paid AI-training tasks on DataAnnotation (owner's own hours)\", \"Direct-sold AI-drafted blog content package to local busines\", \"Upwork fixed-price AI-assisted blog articles for small busin\", \"Fiverr AI-assisted article-writing gig\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+    "title": "Direct-sold AI-drafted blog content package to local businesses, paid by Stripe link",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 300,
+    "card": {
+     "payer": "Local small businesses without an active blog",
+     "reachableChannel": "Owner's own email to local businesses (free Gmail), Stripe payment link",
+     "offerScope": "Pack of 4 SEO blog posts drafted by Brain, $300",
+     "priceCents": 30000,
+     "currency": "USD",
+     "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+     "peakFundingCents": 0,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "content marketing",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner's own email to local businesses (free Gmail), Stripe payment link"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 160, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner's own email to local businesses (free Gmail), Stripe payment link",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Pack of 4 SEO blog posts drafted by Brain, $300 to Local small businesses without an active blog, reached through Owner's own email to local businesses (free Gmail), Stripe payment link, at $300; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$160",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Pack of 4 SEO blog posts drafted by Brain, $300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Local small businesses without an active blog",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.upwork.com/resources/freelance-writing-rates; local business blog content; https://docs.stripe.com/payouts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_bf8ba8a7420b49209f05",
+    "title": "Upwork fixed-price AI-assisted blog articles for small businesses",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 150,
+    "card": {
+     "payer": "Small-business clients posting blog-writing jobs on Upwork",
+     "reachableChannel": "Upwork job feed proposals (owner submits)",
+     "offerScope": "1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers",
+     "priceCents": 15000,
+     "currency": "USD",
+     "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "content marketing",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Upwork job feed proposals (owner submits)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 60, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Upwork job feed proposals (owner submits)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell 1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers to Small-business clients posting blog-writing jobs on Upwork, reached through Upwork job feed proposals (owner submits), at $150; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$60",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Small-business clients posting blog-writing jobs on Upwork",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.upwork.com/hire/blog-writers/cost/; https://www.upwork.com/resources/freelance-writing-rates; https://www.upwork.com/resources/is-upwork-free; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_467db7644f1e4d1db134",
+    "title": "Fiverr AI-assisted article-writing gig",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 100,
+    "card": {
+     "payer": "Fiverr buyers ordering article gigs",
+     "reachableChannel": "Fiverr gig listing (inbound search)",
+     "offerScope": "Fixed-scope blog article gig fulfilled by Brain",
+     "priceCents": 10000,
+     "currency": "USD",
+     "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "content marketing",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Fiverr gig listing (inbound search)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 100 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 45, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "20 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Fiverr gig listing (inbound search)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-scope blog article gig fulfilled by Brain to Fiverr buyers ordering article gigs, reached through Fiverr gig listing (inbound search), at $100; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$45",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-scope blog article gig fulfilled by Brain",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Fiverr buyers ordering article gigs",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid; Fiverr article writing gig; https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-Earnings-page",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "20 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_7f7ce1a008a040ed94cd",
+    "title": "Paid AI-training tasks on DataAnnotation (owner's own hours)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "DataAnnotation (AI training platform)",
+     "reachableChannel": "DataAnnotation application and project dashboard",
+     "offerScope": "Owner's hourly AI-training/annotation work",
+     "priceCents": 2000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "AI data annotation",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: DataAnnotation application and project dashboard"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 20 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "DataAnnotation application and project dashboard",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1 DataAnnotation (AI training platform) (One platform; pay per hour of owner work; 9 owner hours in window)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Owner's hourly AI-training/annotation work to DataAnnotation (AI training platform), reached through DataAnnotation application and project dashboard, at $20; Owner delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Owner's hourly AI-training/annotation work",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "DataAnnotation (AI training platform)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$20",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$20",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://dataannotation.tech/blog/does-data-annotation-pay-well; https://www.secondtalent.com/resources/is-dataannotation-legit/; owner hours ceiling 9",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 21,
+   "hoursCeiling": 9,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 3
+  },
+  "at": "2026-11-28T06:09:44.011Z"
+ }
+}

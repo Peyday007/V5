@@ -1,0 +1,296 @@
+{
+ "caseId": "av-09-propane-leak-checks-net",
+ "keys": {
+  "cop_29ad1c33af13485a947c": "leakChecks",
+  "cop_e39b282ab6204a519a6d": "cylinderExchange"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Subcontracted customer-tank leak checks for propane dealers,\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Subcontracted customer-tank leak checks for propane dealers,\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3825× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted customer-tank leak checks for propane dealers, in batche\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_29ad1c33af13485a947c",
+   "cop_e39b282ab6204a519a6d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+    "owner": "PERSON",
+    "cost": 1425
+   },
+   {
+    "label": "Collect payment for \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_29ad1c33af13485a947c",
+    "title": "Subcontracted customer-tank leak checks for propane dealers, in batches of 15",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3500,
+    "potentialReach": 3500,
+    "card": {
+     "payer": "Service managers at independent propane dealers",
+     "reachableChannel": "The three service managers who signed work orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:40.383Z",
+     "offerScope": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+     "priceCents": 270000,
+     "currency": "USD",
+     "fulfillmentOwner": "Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane technicians; can test 10 tanks a day from day 2; paid from each dealer's payment within 2 days of receipt)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "propane distribution",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 270000,
+      "currency": "USD",
+      "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 270000,
+      "currency": "USD",
+      "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 270000,
+      "currency": "USD",
+      "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three service managers who signed work orders"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 8100 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 8100 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane t (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1425, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "16 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1425",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane technicians; can test 10 tanks a day from day 2; paid from each dealer's payment within 2 days of receipt) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Service managers at independent propane dealers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks, $180 a tank (signed work orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "16 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_e39b282ab6204a519a6d",
+    "title": "Restocking 20-lb cylinder exchange cages at convenience stores",
+    "missing": [
+     "MARKET_VOLUME",
+     "ECONOMICS"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Convenience-store managers hosting exchange cages",
+     "reachableChannel": "Visits to stores in the county",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:40.383Z",
+     "offerScope": "Restocking 20-lb cylinder exchange cages at convenience stores",
+     "priceCents": 2200,
+     "currency": "USD",
+     "fulfillmentOwner": "Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered)",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [],
+     "industry": "propane distribution",
+     "mechanism": "RESALE_OR_ASSET",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three service managers who signed work orders | reach: Visits to stores in the county"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 8100 USD | price 22 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 8100 USD | measured on this offer's own sales: 30 accepted of 140 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "a one-off needs its one buyer | 561 deal(s) needed but only 560 in the window (140 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane t (a source says so) | fulfilled by Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 1425, tied up 0 | each deal loses money: a cost of 23 against a price of 22"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "16 days to usable cash against 30 left | 7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "140 convenience stores in the county host exchange cages and restock weekly.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Restocking 20-lb cylinder exchange cages at convenience stores to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "30 paid orders from 140 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$23",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Convenience-store managers hosting exchange cages",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Convenience stores pay the restocker $22 per filled 20-lb cylinder delivered to the cage (distributor price sheet, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 350000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:56:17.469Z"
+ }
+}

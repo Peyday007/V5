@@ -1,0 +1,607 @@
+{
+ "caseId": "aw-04-short-window-no-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: AI-training evaluation work on DataAnnotation, paid hourly v\", and what it is missing first is an offer and a price. Research first: the deep dive on \"AI-training evaluation work on DataAnnotation, paid hourly v\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 700× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Owner-sent emails offering a [figure withheld] website to local businesse\" needs [figure withheld] and keeps [figure withheld], 250× the [figure withheld] behind the plan (bound ×20), on a ), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_2d044510d3494b649398",
+   "cop_c77c549c5f3a4f7383ee",
+   "cop_e9bb1449d06b4f379ef8",
+   "cop_56436a0c43754342be51"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dive on \"AI-training evaluation work on DataAnnotation, paid hourly v\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_c77c549c5f3a4f7383ee",
+    "title": "Owner-sent emails offering a $500 website to local businesses without a site, owner builds it with an AI site builder",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 500,
+    "card": {
+     "payer": "US local service business owner (no website or outdated site)",
+     "reachableChannel": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+     "offerScope": "Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 6,
+     "requiredCapabilities": [],
+     "industry": "Local services / web design",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner's own Gmail, manually sent to businesses found on Google Maps with no webs"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "7 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal to US local service business owner (no website or outdated site), reached through Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free), at $500; Owner, using a free-tier AI website builder delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner, using a free-tier AI website builder.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "6 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local service business owner (no website or outdated site)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/jobs/website-design/; https://www.webfx.com/web-design/pricing/website-costs; https://www.paypal.com/us/cshelp/article/PCC112; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/cold-email-benchmark-report-2026; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_e9bb1449d06b4f379ef8",
+    "title": "Owner-sent emails offering a $500 website to local businesses without a site",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 500,
+    "card": {
+     "payer": "US local service business owner (no website or outdated site)",
+     "reachableChannel": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+     "offerScope": "Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "Local services / web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner's own Gmail, manually sent to businesses found on Google Maps with no webs"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 250, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice to US local service business owner (no website or outdated site), reached through Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free), at $500; Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local service business owner (no website or outdated site)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/jobs/website-design/; https://www.webfx.com/web-design/pricing/website-costs; https://www.paypal.com/us/cshelp/article/PCC112; https://fiverr.com/farzanakhan_01/website-or-landing-page; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/cold-email-benchmark-report-2026; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_2d044510d3494b649398",
+    "title": "Bid on posted website-build requests on Freelancer.com (owner builds with AI site builders)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "B_EVIDENCED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Clients posting website-design projects on Freelancer.com",
+     "reachableChannel": "Freelancer.com bids",
+     "offerScope": "Build the requested business website / redesign with AI-assisted development",
+     "priceCents": 35000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 6,
+     "requiredCapabilities": [],
+     "industry": "Web development marketplace",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Freelancer.com bids"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Freelancer.com bids",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "355 Clients posting website-design projects on Freelancer.com (355 open Website Design jobs listed on Freelancer.com 2026-11-27, average bids 2-,415, typical business site 14-57, 100-490 bids each)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Build the requested business website / redesign with AI-assisted development to Clients posting website-design projects on Freelancer.com, reached through Freelancer.com bids, at $350; Owner, using a free-tier AI website builder delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner, using a free-tier AI website builder.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "6 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Build the requested business website / redesign with AI-assisted development",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Clients posting website-design projects on Freelancer.com",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$350",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$350",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/jobs/website-design/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_56436a0c43754342be51",
+    "title": "AI-training evaluation work on DataAnnotation, paid hourly via PayPal",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1000,
+    "card": {
+     "payer": "DataAnnotation (AI training data company)",
+     "reachableChannel": "DataAnnotation worker application and Starter Assessment",
+     "offerScope": "Hourly evaluation of chatbot responses / code by the owner",
+     "priceCents": 2500,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "AI data annotation",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: DataAnnotation worker application and Starter Assessment"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 25 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "160 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "40 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "7 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "DataAnnotation worker application and Starter Assessment",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1 DataAnnotation (AI training data company) (One payer; per-hour 'sale'; work availability not guaranteed per FAQ)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Hourly evaluation of chatbot responses / code by the owner to DataAnnotation (AI training data company), reached through DataAnnotation worker application and Starter Assessment, at $25; Owner delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Hourly evaluation of chatbot responses / code by the owner",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "DataAnnotation (AI training data company)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$25",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "DataAnnotation publishes its pay for general AI-training projects as starting at $25-$50 per hour, paid via PayPal, with deposits delivered within a few days of a payout request; work availability is not guaranteed.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 100000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T06:07:11.587Z"
+ }
+}

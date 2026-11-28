@@ -1,0 +1,772 @@
+[
+  {
+    "id": "av-01-winery-dtc-reports-executable",
+    "heldOut": true,
+    "description": "Shipping-report workbook for small wineries. Volume is this seller's own counted reach: 410 direct-shipper wineries listed with emails; its own outreach measured 18 paid orders from 150 contacts (12%). $2,500 needs ceil(2500/240) = 11 orders, about 92 contacts of the 410 (410 x 12% = 49 orders = $11,760 of room). Brain builds each within one day at $4 cost ($236 kept). Calendar: outreach days 1-10, orders by day 20, card payout 5 days after the order, so the last cash lands by day 25, inside 30. No capital. The second opening is a trap: its $22 is the hourly wage harvest workers are paid, not a price a vineyard pays for a placement; it may not be counted. Executable on the workbook alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "wineries",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "dtcWorkbook",
+        "title": "Direct-to-consumer shipping-report workbook for small wineries",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "wineries",
+        "payer": "Tasting-room and DTC managers at small wineries",
+        "channel": "Email to the contacts in the state winegrowers association's public member directory",
+        "signalDaysAgo": 6,
+        "offer": "A workbook that turns a winery's order export into its monthly per-state direct-shipping reports; Brain builds each from the winery's export within one day of the order. Paid by card at order; the processor pays out 5 days later.",
+        "price": 240,
+        "priceEvidence": "Two DTC-compliance template sellers list a per-winery state shipping-report workbook at $240 (listing pages, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "410 wineries holding a direct-shipper permit are listed with contact emails in the state winegrowers association's public member directory; each files shipping reports monthly.",
+        "conversion": {
+          "paid": 18,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "harvestCrew",
+        "title": "Harvest-crew labour placement for vineyards",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "wineries",
+        "payer": "Vineyard managers",
+        "channel": "Phone calls to vineyard managers in the county",
+        "price": 22,
+        "priceEvidence": "Vineyard harvest workers in the county are paid a $22 hourly wage (state agricultural wage survey, 2026).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Valley Farm Labor Contractors (licensed crew leader)",
+        "volume": "60 vineyards in the county hire harvest crews each autumn.",
+        "conversion": {
+          "paid": 10,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "harvestCrew"
+      ],
+      "notAPurchasePrice": [
+        "harvestCrew"
+      ]
+    }
+  },
+  {
+    "id": "av-02-vending-audit-price-only-said",
+    "heldOut": true,
+    "description": "Route-profitability audit for vending operators. Buyers are counted (380 operators with emails), demand is dated, Brain produces it at $5 and payout is 4 days; at $350, $3,000 would need 9 sales. But the $350 is only the owner's statement that operators would pay it: no listing, quote or order shows any operator paying that figure. No executable plan until the price is evidenced; the decisive gap is the offer and price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "vending machine operators",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "routeAudit",
+        "title": "Route-profitability audit workbook for vending machine operators",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "vending machine operators",
+        "payer": "Owner-operators of small vending routes",
+        "channel": "Email to the members listed in the state vending association's directory",
+        "offer": "A workbook that ranks each machine on a route by margin per service visit from the operator's sales export; Brain builds it within one day.",
+        "price": 350,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says route operators would pay $350 for the audit.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "380 vending operators are listed with contact emails in the state vending association's member directory; each reprices its machines every quarter.",
+        "conversion": {
+          "paid": 9,
+          "of": 80,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "routeAudit"
+      }
+    }
+  },
+  {
+    "id": "av-03-plumbing-medgas-no-verifier",
+    "heldOut": true,
+    "description": "Three plumbing contractors signed for third-party medical-gas verification at $2,800 each: $8,400 against $6,000 in 40 days, price evidenced by published rate sheets. But the work is an on-site test that only a certified medical-gas verifier may perform; no verifier has been engaged or quoted, and Brain cannot test on site. Nobody is established to fulfil it, so no executable plan; the decisive gap is fulfilment.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "FULFILMENT",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "plumbing contractors",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $6,000 of settled cash within 40 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "medGas",
+        "title": "Third-party medical-gas system verification for plumbing contractors finishing clinic build-outs",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "plumbing contractors",
+        "payer": "Project managers at commercial plumbing contractors",
+        "channel": "The three project managers, who signed by email",
+        "offer": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+        "price": 2800,
+        "priceEvidence": "Published rate sheets of two regional medical-gas verifiers quote $2,800 for verifying a single-zone outpatient clinic system (2026-10).",
+        "cost": 1400,
+        "capital": 0,
+        "daysToCash": 15,
+        "hours": 2,
+        "performer": "NOBODY",
+        "agreements": [
+          2800,
+          2800,
+          2800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "FULFILMENT"
+        ],
+        "opening": "medGas"
+      }
+    }
+  },
+  {
+    "id": "av-04-livestock-auction-one-sound",
+    "heldOut": true,
+    "description": "Three openings at livestock auction markets; one is sound at scale. (1) Consignment-settlement reconciliation workbook: 240 registered markets with office emails, this seller's own measured 14 paid orders from 120 contacts (11.7%), $650, $8 cost, Brain builds it. $4,000 needs ceil(4000/650) = 7 orders, about 60 contacts (240 x 11.7% = 28 orders = $18,200 of room). Calendar: outreach days 1-10, orders by day 20, card payout 6 days, last cash day 26 of 35. (2) Tri-County Livestock Exchange's one $2,400 purchase order is one real deal (deliver by day 5, paid net 20, day 25) but one organisation's one procurement: at most 1 deal, never a population. (3) Bred-heifer resale ties up $21,000 a load against a $500 capital limit and may not be used. Executable.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "livestock auction markets",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 35 days with at most $500 of capital.",
+    "openings": [
+      {
+        "key": "consignmentRecon",
+        "title": "Consignment-settlement reconciliation workbook for livestock auction markets",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "livestock auction markets",
+        "payer": "Office managers at livestock auction markets",
+        "channel": "Email to the office addresses on the federal registered-market list",
+        "offer": "A workbook that reconciles a market's weekly consignor settlements against its custodial account; Brain builds it from the market's sale-day export within one day. Paid by card at order; the processor pays out 6 days later.",
+        "price": 650,
+        "priceEvidence": "Agricultural bookkeeping template sellers list a custodial-account reconciliation workbook for auction markets at $650 (listing pages, 2026-11).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 6,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "240 livestock auction markets in the region are on the federal registered-market list with office emails; each settles consignor accounts weekly and is audited for custodial-account shortages.",
+        "conversion": {
+          "paid": 14,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "triCounty",
+        "title": "Custodial-account audit preparation for Tri-County Livestock Exchange",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "livestock auction markets",
+        "payer": "Tri-County Livestock Exchange (general manager)",
+        "channel": "The general manager's emailed purchase order",
+        "offer": "One audit-preparation package, delivered by day 5; the exchange pays net 20 days from delivery.",
+        "price": 2400,
+        "priceEvidence": "Tri-County Livestock Exchange's general manager issued a $2,400 purchase order for one custodial-account audit-preparation package (PO dated 2026-11-20).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 25,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          2400
+        ]
+      },
+      {
+        "key": "heiferResale",
+        "title": "Buying and reselling loads of bred heifers",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "livestock auction markets",
+        "payer": "Cow-calf ranchers rebuilding herds",
+        "channel": "Consignment at the regional sale barn",
+        "price": 26000,
+        "priceEvidence": "A load of ten bred heifers sold for $26,000 at the regional sale barn (market report, 2026-11-14).",
+        "cost": 21000,
+        "capital": 21000,
+        "daysToCash": 21,
+        "hours": 8,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Prairie Livestock Hauling (licensed hauler, quoted)",
+        "agreements": [
+          26000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 500,
+      "mustNotUse": [
+        "heiferResale"
+      ],
+      "payerDealsMax": {
+        "triCounty": 1
+      }
+    }
+  },
+  {
+    "id": "av-05-water-well-paid-net-45",
+    "heldOut": true,
+    "description": "Six water-well drillers signed $450 closeout filings: $2,700 against $2,000. Brain files each within 3 days, but the signed terms are invoice on filing, paid net 45. Day by day: filings days 1-3, invoices days 1-3, first payment day 46 at the earliest, against a 14-day window. No cash can settle in time; infeasible on the deadline.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "water-well drilling",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "wellCloseout",
+        "title": "Well-completion report and permit closeout filing for water-well drilling contractors",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "water-well drilling",
+        "payer": "Owners of water-well drilling companies",
+        "channel": "The six owners who signed service orders by email",
+        "offer": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "price": 450,
+        "priceEvidence": "Six drilling contractors signed service orders at $450 per well closeout filing (signed orders, 2026-11).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 46,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          450,
+          450,
+          450,
+          450,
+          450,
+          450
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "av-06-dry-cleaner-perc-owner-hours",
+    "heldOut": true,
+    "description": "2 owner hours a week over 28 days is 8 hours. The perc recordkeeping workbook: 530 permitted plants with phone and email, this seller's own measured 15 paid orders from 125 contacts (12%), $290, $4 cost, Brain builds it. $2,500 needs ceil(2500/290) = 9 orders, about 75 contacts (530 x 12% = 63 orders of room), 9 x 0.25 h = 2.25 h. Calendar: outreach days 1-10, orders by day 18, payout 4 days, last cash day 22 of 28. The owner's on-site pressing consultation takes 9 owner hours a deal, over the 8 allowed even once. Executable on the workbook alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "dry cleaning",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "percLog",
+        "title": "Perchloroethylene usage and leak-inspection recordkeeping workbook for dry cleaners",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "dry cleaning",
+        "payer": "Owners of independent dry cleaners",
+        "channel": "Email and phone to the plants on the state air-permit list",
+        "offer": "A workbook for monthly perc purchase records and weekly leak inspections, built by Brain within one day of the order. Paid by card at order; payout 4 days later.",
+        "price": 290,
+        "priceEvidence": "Environmental-compliance template sellers list a perc dry-cleaner recordkeeping workbook at $290 (listing pages, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.25,
+        "performer": "BRAIN",
+        "volume": "530 dry-cleaning plants hold a state air permit for perchloroethylene machines; the public permit list gives each plant's phone and email, and each must keep monthly perc purchase and weekly leak-inspection records.",
+        "conversion": {
+          "paid": 15,
+          "of": 125,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "pressingFloor",
+        "title": "On-site pressing-floor efficiency consultation by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "dry cleaning",
+        "payer": "Owners of independent dry cleaners",
+        "channel": "The three owners who signed consultation agreements",
+        "offer": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+        "price": 900,
+        "priceEvidence": "Three dry-cleaner owners signed consultation agreements at $900 each (signed agreements, 2026-11).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 9,
+        "performer": "OWNER",
+        "agreements": [
+          900,
+          900,
+          900
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 8,
+      "mustNotUse": [
+        "pressingFloor"
+      ]
+    }
+  },
+  {
+    "id": "av-07-maple-label-price-contradicted",
+    "heldOut": true,
+    "description": "Label files for maple producers. First reading: 620 producers with emails, this seller's measured 20 paid orders from 160 contacts (12.5%), $180, $3 cost, Brain builds it; $2,000 needs ceil(2000/180) = 12 orders (about 96 contacts); outreach days 1-12, orders by day 20, payout 4 days, last cash day 24 of 30. Executable. Then a new source prices the same label set at $18. On a contested price the plan cannot rest on $180 (at $18 the whole counted market, 620 x 12.5% = 78 orders, is $1,404, under $2,000). After the change, no executable plan; the price must be settled first.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "maple syrup production",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "mapleLabels",
+        "title": "Nutrition-facts and allergen label files for small maple syrup producers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "maple syrup production",
+        "payer": "Sugarmakers who bottle and sell their own syrup",
+        "channel": "Email to the producers listed in the state maple producers association's directory",
+        "offer": "A print-ready nutrition-facts and allergen label file set for each bottle size, built by Brain within one day. Paid by card at order; payout 4 days later.",
+        "price": 180,
+        "priceEvidence": "Food-label design services list a nutrition-facts label file set for a single-ingredient syrup at $180 (published price pages, 2026-11).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "620 maple producers are listed with emails in the state maple producers association's public directory; each relabels before the spring sugaring season.",
+        "conversion": {
+          "paid": 20,
+          "of": 160,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "CONTRADICTING_EVIDENCE",
+          "opening": "mapleLabels",
+          "field": "price",
+          "value": 18
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "mapleLabels"
+      }
+    }
+  },
+  {
+    "id": "av-08-yoga-owner-teaches-over-hours",
+    "heldOut": true,
+    "description": "Four employers signed $960 eight-session lunchtime yoga programmes; the owner teaches every session herself (1.5 hours each with travel, so 12 owner hours a programme) and no substitute instructor is established. $3,000 needs 4 programmes (3 is $2,880): 48 owner hours. The objective allows 4 hours a week over 35 days, 20 hours: one programme fits (12 h, $960), two do not (24 h). The calendar is not what binds: sessions twice a week from day 2 end on day 26 and pay on day 33. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "yoga studios",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $3,000 of settled cash within 35 days with no more than 4 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "corporateYoga",
+        "title": "Eight-session lunchtime yoga programmes taught on site by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "yoga studios",
+        "payer": "HR and wellness coordinators at local employers",
+        "channel": "The four coordinators who signed programme agreements",
+        "offer": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+        "price": 960,
+        "priceEvidence": "Four employers signed eight-session programme agreements at $960 each (signed agreements, 2026-11).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 33,
+        "hours": 12,
+        "performer": "OWNER",
+        "agreements": [
+          960,
+          960,
+          960,
+          960
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 20
+    }
+  },
+  {
+    "id": "av-09-propane-leak-checks-net",
+    "heldOut": true,
+    "description": "A net objective: $3,500 kept after direct costs. Three propane dealers signed $2,700 work orders (15 tanks at $180); Keystone Gas Services tests at $95 a tank ($1,425 a batch), so each batch keeps $1,275. Two batches gross $5,400 but keep only $2,550; all three keep $3,825 >= $3,500. Calendar: the crew tests 10 tanks a day from day 2, so batches finish days 3, 4 and 6; dealers pay 10 days after completion (days 13, 14, 16); the crew is paid from each dealer payment within 2 days (by day 18): nothing tied up, all inside 30. The cylinder-exchange restock costs $23 against a $22 price, a loss per deal, and may not be used. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "propane distribution",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $3,500 of net settled cash after direct costs within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "leakChecks",
+        "title": "Subcontracted customer-tank leak checks for propane dealers, in batches of 15",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "propane distribution",
+        "payer": "Service managers at independent propane dealers",
+        "channel": "The three service managers who signed work orders",
+        "offer": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+        "price": 2700,
+        "priceEvidence": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks, $180 a tank (signed work orders, 2026-11).",
+        "cost": 1425,
+        "capital": 0,
+        "daysToCash": 16,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane technicians; can test 10 tanks a day from day 2; paid from each dealer's payment within 2 days of receipt)",
+        "agreements": [
+          2700,
+          2700,
+          2700
+        ]
+      },
+      {
+        "key": "cylinderExchange",
+        "title": "Restocking 20-lb cylinder exchange cages at convenience stores",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "propane distribution",
+        "payer": "Convenience-store managers hosting exchange cages",
+        "channel": "Visits to stores in the county",
+        "price": 22,
+        "priceEvidence": "Convenience stores pay the restocker $22 per filled 20-lb cylinder delivered to the cage (distributor price sheet, 2026-11).",
+        "cost": 23,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered)",
+        "volume": "140 convenience stores in the county host exchange cages and restock weekly.",
+        "conversion": {
+          "paid": 30,
+          "of": 140,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "cylinderExchange"
+      ]
+    }
+  },
+  {
+    "id": "av-10-monument-list-market-too-small",
+    "heldOut": true,
+    "description": "Final-date lettering lists for monument dealers: every link is evidenced (140 dealers counted in the association directory, 12 paid of 60 contacts, $149, Brain, 3-day payout), and each dealer buys at most one list package a season. The whole counted market is 140 x $149 = $20,860 even if every dealer bought, under the $40,000 target. Infeasible on the target.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "memorial monument dealers",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "objective": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "letteringList",
+        "title": "Weekly list of recorded deaths matched to pre-purchased monuments needing final-date lettering, for monument dealers",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "memorial monument dealers",
+        "payer": "Owners of monument and memorial dealers",
+        "channel": "Email to the dealers listed in the state monument builders association's directory",
+        "offer": "A season list package, compiled by Brain from public death records and cemetery permits. Paid by card; payout 3 days later.",
+        "price": 149,
+        "priceEvidence": "Two lead-list services sell a monument-dealer final-date lettering list package at $149 (listing pages, 2026-11).",
+        "cost": 2,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.2,
+        "performer": "BRAIN",
+        "volume": "140 monument dealers are listed in the state monument builders association's directory; each buys at most one list package a season.",
+        "conversion": {
+          "paid": 12,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "av-11-welding-objective-narrowed",
+    "heldOut": true,
+    "description": "First reading (open objective): either opening reaches $3,000 - the owner's three signed $1,200 mobile repairs ($3,600, 30 owner hours, no hours limit) or the workbook. Then the owner restricts it to structural steel fabrication with at most 3 owner hours a week (30 days, 12 hours) and no capital. The repairs are now out of the named industry and over the hours. The welder-qualification log workbook: 300 shops with quality-manager emails, this seller's measured 21 paid of 150 contacts (14%), $380, $5 cost, Brain builds it; ceil(3000/380) = 8 orders, about 57 contacts (300 x 14% = 42 orders of room), 8 x 0.5 h = 4 h. Calendar: outreach days 1-15, orders by day 20, payout 5 days, last cash day 25 of 30. Executable after the change on the workbook alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "structural steel fabrication",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "wpqLog",
+        "title": "Welder-qualification continuity log workbook for structural steel fabrication shops",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "structural steel fabrication",
+        "payer": "Quality managers at structural steel fabricators",
+        "channel": "Email to the shops listed in the state fabricators association's public member directory",
+        "offer": "A workbook tracking every welder's process continuity against the six-month rule, built by Brain from the shop's welder roster within one day. Paid by card at order; payout 5 days later.",
+        "price": 380,
+        "priceEvidence": "Welding-compliance template sellers list a welder-qualification continuity log workbook at $380 (listing pages, 2026-11).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "300 fabrication shops are listed with quality-manager emails in the state fabricators association's public directory; each must keep every welder's qualification continuity current under its certification audit.",
+        "conversion": {
+          "paid": 21,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "mobileRepair",
+        "title": "Owner-performed mobile welding repairs for farm-equipment dealers",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "farm equipment repair",
+        "payer": "Service managers at farm-equipment dealerships",
+        "channel": "The three service managers who signed repair orders",
+        "offer": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+        "price": 1200,
+        "priceEvidence": "Three dealerships signed repair orders at $1,200 each (signed orders, 2026-11).",
+        "cost": 150,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 10,
+        "performer": "OWNER",
+        "agreements": [
+          1200,
+          1200,
+          1200
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $3,000 of settled cash within 30 days in a single industry I name, structural steel fabrication, with no more than 3 hours a week of my time and no up-front capital."
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 12,
+      "mustNotUse": [
+        "mobileRepair"
+      ],
+      "targetAfterChange": 3000
+    }
+  },
+  {
+    "id": "av-12-museum-grant-as-price",
+    "heldOut": true,
+    "description": "Collections-care assessments for small history museums: buyers counted (210 with director emails), Brain produces, cost $40. The only $5,000 on the card is a state humanities council grant paid to museums for collections projects - money paid to the buyer, not a price any museum pays for an assessment. Nothing evidences what a museum pays for the deliverable, so the $8,000 target rests on no price. No executable plan; the decisive gap is the offer and price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "small history museums",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "collectionsAssessment",
+        "title": "Collections-care needs assessment for small history museums",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "small history museums",
+        "payer": "Directors of small history museums",
+        "channel": "Email to the museums listed in the state museum association's directory",
+        "offer": "A written collections-care needs assessment built by Brain from the museum's inventory and storage survey.",
+        "price": 5000,
+        "priceEvidence": "The state humanities council awards small museums $5,000 project grants for collections care (grant guidelines, 2026 cycle).",
+        "cost": 40,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "210 small history museums are listed with director emails in the state museum association's directory; each documents collections-care needs for accreditation.",
+        "conversion": {
+          "paid": 4,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "collectionsAssessment"
+      },
+      "notAPurchasePrice": [
+        "collectionsAssessment"
+      ]
+    }
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "aw-01-small-target-owner-hours",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "I need $1,500 in my account within 21 days. I can't put any money in up front, and I only have about 3 hours a week to give it.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "aw-02-named-industry-trucking",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Find me a way to make $6,000 within 45 days selling to small trucking companies only (fleets under 20 trucks). I can put up to $1,000 into it.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "aw-03-large-target-with-capital",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Turn $2,500 into at least $12,000 of collected cash within 30 days. Any industry is fine.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "aw-04-short-window-no-capital",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Get me $1,000 of cash in hand within 14 days, with no money in.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,307 @@
+{
+ "caseId": "av-06-dry-cleaner-perc-owner-hours",
+ "keys": {
+  "cop_b0991136ea5846969c0c": "percLog",
+  "cop_3d4b341b9ee54ceba3d8": "pressingFloor"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14204× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Perchloroethylene usage and leak-inspection recordkeeping wo\" needs [figure withheld] and keeps [figure withheld], 286× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_b0991136ea5846969c0c"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the supply",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 70.29657043481598
+   },
+   {
+    "label": "Collect payment for \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_b0991136ea5846969c0c",
+    "title": "Perchloroethylene usage and leak-inspection recordkeeping workbook for dry cleaners",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Owners of independent dry cleaners",
+     "reachableChannel": "Email and phone to the plants on the state air-permit list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:23.485Z",
+     "offerScope": "A workbook for monthly perc purchase records and weekly leak inspections, built by Brain within one day of the order. Paid by card at order; payout 4 days later.",
+     "priceCents": 29000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.25,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "dry cleaning",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email and phone to the plants on the state air-permit list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 15 accepted of 125 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "4 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "530 dry-cleaning plants hold a state air permit for perchloroethylene machines; the public permit list gives each plant's phone and email, and each must keep monthly perc purchase and weekly leak-inspection records.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook for monthly perc purchase records and weekly leak inspections, built by Brain within one day of the order. Paid by card at order; payout 4 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "15 paid orders from 125 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent dry cleaners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Environmental-compliance template sellers list a perc dry-cleaner recordkeeping workbook at $290 (listing pages, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+    "title": "On-site pressing-floor efficiency consultation by the owner",
+    "reason": "needs the owner's physical work: the service (\"On-site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "Owners of independent dry cleaners",
+     "reachableChannel": "The three owners who signed consultation agreements",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:23.485Z",
+     "offerScope": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+     "priceCents": 90000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 9,
+     "requiredCapabilities": [],
+     "industry": "dry cleaning",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent dry cleaners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three dry-cleaner owners signed consultation agreements at $900 each (signed agreements, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 28,
+   "hoursCeiling": 8,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 2
+  },
+  "at": "2026-11-28T05:56:16.222Z"
+ }
+}

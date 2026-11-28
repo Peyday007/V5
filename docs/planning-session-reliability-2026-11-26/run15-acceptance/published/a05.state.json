@@ -1,0 +1,962 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_91c848fbbf7243cba111",
+   "words": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of $2,000 received within 14 days, with no up-front capital spent",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "7879d3e68126b17aca80eac3"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_91c848fbbf7243cba111",
+    "contractDigest": "7879d3e68126b17aca80eac3",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening settles after the 14-day deadline",
+     "opportunityIds": [],
+     "why": "The six signed well-closeout service orders ($450 each, $2,700 total) would cover the $2,000 target at no capital, but their signed terms are invoiced on filing and paid net 45 days, so the first usable cash arrives about day 46 against 14 days available. No other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Use the six signed drilling-contractor orders as written",
+      "why": "Rejected: net-45 terms put every receipt at ~day 46, after the 14-day window; settled cash inside the window is $0."
+     },
+     {
+      "title": "Renegotiate the six orders to card payment on filing",
+      "why": "Would make the opening executable, but nothing on the record shows any driller accepts changed terms; it must be asked and measured before a plan rests on it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six signed drilling-contractor owners by email whether they will pay each $450 closeout by card on filing instead of net 45, and record each written answer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_terms",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per closeout filing",
+      "status": "EVIDENCED",
+      "value": 45000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to first usable cash",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "days",
+      "sources": [
+       "s_ttc",
+       "s_terms"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days left in window",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#price",
+      "dated": "2026-11",
+      "claim": "Six drilling contractors signed service orders at $450 per well closeout filing",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Time to first cash is 46 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_terms",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Signed terms: invoiced on filing, paid net 45 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: the only opening's signed terms pay net 45 days after filing, so its $2,700 of signed orders settles about day 46, after the 14-day deadline; no cash settles inside the window.",
+     "resolution": "Either extend the deadline to at least 46 days (the signed orders then carry the target with no capital), or have Brain ask the six signed drillers to switch to card payment on filing; if at least five agree in writing, re-plan as executable.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Extend the deadline from 14 to at least 46 days so the net-45 receipts on the six signed orders settle inside it",
+      "basis": [
+       {
+        "opportunityId": "cop_17120eb00be24fce818e",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_6bca809f67c0_9ba119",
+    "digest": "6bca809f67c08aa303100fb6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_44875bb01b5245c5ae8b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:16.545Z"
+   },
+   {
+    "goalId": "wst_91c848fbbf7243cba111",
+    "contractDigest": "7879d3e68126b17aca80eac3",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening settles after the 14-day deadline",
+     "opportunityIds": [],
+     "why": "The six signed well-closeout service orders ($450 each, $2,700 total) would cover the $2,000 target at no capital, but their signed terms are invoiced on filing and paid net 45 days, so the first usable cash arrives about day 46 against 14 days available. No other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Use the six signed drilling-contractor orders as written",
+      "why": "Rejected: net-45 terms put every receipt at ~day 46, after the 14-day window; settled cash inside the window is $0."
+     },
+     {
+      "title": "Renegotiate the six orders to card payment on filing",
+      "why": "Would make the opening executable, but nothing on the record shows any driller accepts changed terms; it must be asked and measured before a plan rests on it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six signed drilling-contractor owners by email whether they will pay each $450 closeout by card on filing instead of net 45, and record each written answer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_terms",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per closeout filing",
+      "status": "EVIDENCED",
+      "value": 45000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to first usable cash",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "days",
+      "sources": [
+       "s_ttc",
+       "s_terms"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#price",
+      "dated": "2026-11",
+      "claim": "Six drilling contractors signed service orders at $450 per well closeout filing",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Time to first cash is 46 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_terms",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Signed terms: invoiced on filing, paid net 45 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: the only opening's signed terms pay net 45 days after filing, so its $2,700 of signed orders settles about day 46, after the 14-day deadline; no cash settles inside the window.",
+     "resolution": "Either extend the deadline to at least 46 days (the signed orders then carry the target with no capital), or have Brain ask the six signed drillers to switch to card payment on filing; if at least five agree in writing, re-plan as executable.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "deals": 5,
+      "price": 450,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 46,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Extend the deadline from 14 to at least 46 days so the net-45 receipts on the six signed orders settle inside it",
+      "basis": [
+       {
+        "opportunityId": "cop_17120eb00be24fce818e",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_61edda6a8a57_8ab75b",
+    "digest": "61edda6a8a57a22b3e91ced6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_44875bb01b5245c5ae8b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:25.312Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_91c848fbbf7243cba111",
+   "contractDigest": "7879d3e68126b17aca80eac3",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening settles after the 14-day deadline",
+    "opportunityIds": [],
+    "why": "The six signed well-closeout service orders ($450 each, $2,700 total) would cover the $2,000 target at no capital, but their signed terms are invoiced on filing and paid net 45 days, so the first usable cash arrives about day 46 against 14 days available. No other opening is held."
+   },
+   "alternatives": [
+    {
+     "title": "Use the six signed drilling-contractor orders as written",
+     "why": "Rejected: net-45 terms put every receipt at ~day 46, after the 14-day window; settled cash inside the window is $0."
+    },
+    {
+     "title": "Renegotiate the six orders to card payment on filing",
+     "why": "Would make the opening executable, but nothing on the record shows any driller accepts changed terms; it must be asked and measured before a plan rests on it."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the six signed drilling-contractor owners by email whether they will pay each $450 closeout by card on filing instead of net 45, and record each written answer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_terms",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price per closeout filing",
+     "status": "EVIDENCED",
+     "value": 45000,
+     "unit": "cents",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "orders",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to first usable cash",
+     "status": "EVIDENCED",
+     "value": 46,
+     "unit": "days",
+     "sources": [
+      "s_ttc",
+      "s_terms"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_17120eb00be24fce818e#price",
+     "dated": "2026-11",
+     "claim": "Six drilling contractors signed service orders at $450 per well closeout filing",
+     "population": "Owners of water-well drilling companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_17120eb00be24fce818e"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_17120eb00be24fce818e#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "Time to first cash is 46 days",
+     "population": "Owners of water-well drilling companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_17120eb00be24fce818e"
+    },
+    {
+     "id": "s_terms",
+     "url": "https://brain.local/card/cop_17120eb00be24fce818e#captureMechanism",
+     "dated": "2026-11",
+     "claim": "Signed terms: invoiced on filing, paid net 45 days",
+     "population": "Owners of water-well drilling companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_17120eb00be24fce818e"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement timing: the only opening's signed terms pay net 45 days after filing, so its $2,700 of signed orders settles about day 46, after the 14-day deadline; no cash settles inside the window.",
+    "resolution": "Either extend the deadline to at least 46 days (the signed orders then carry the target with no capital), or have Brain ask the six signed drillers to switch to card payment on filing; if at least five agree in writing, re-plan as executable.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_17120eb00be24fce818e",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_17120eb00be24fce818e",
+     "deals": 5,
+     "price": 450,
+     "directCost": 6,
+     "capital": 0,
+     "settlesDay": 46,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Extend the deadline from 14 to at least 46 days so the net-45 receipts on the six signed orders settle inside it",
+     "basis": [
+      {
+       "opportunityId": "cop_17120eb00be24fce818e",
+       "field": "timeToFirstCash"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_61edda6a8a57_8ab75b",
+   "digest": "61edda6a8a57a22b3e91ced6",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_44875bb01b5245c5ae8b/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:57:25.312Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_61edda6a8a57_8ab75b",
+   "digest": "61edda6a8a57a22b3e91ced6",
+   "contractDigest": "7879d3e68126b17aca80eac3",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $2,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 46 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_17120eb00be24fce818e"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "title": "Well-completion report and permit closeout filing for water-well drilling contractors",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Owners of water-well drilling companies",
+       "reachableChannel": "The six owners who signed service orders by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:17.752Z",
+       "offerScope": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+       "priceCents": 45000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "water-well drilling",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 45000,
+        "currency": "USD",
+        "deliverable": "Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six owners who signed service orders by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 2700 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 2700 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 6, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "46 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain files each well-completion report and permit closeout within 3 days of receiving the driller's log. Signed terms: invoiced on filing, paid net 45 days. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of water-well drilling companies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six drilling contractors signed service orders at $450 per well closeout filing (signed orders, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "46 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 200000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:56:16.177Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_61edda6a8a57_8ab75b",
+    "revisionDigest": "61edda6a8a57a22b3e91ced6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_44875bb01b5245c5ae8b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b4f51f6e54e94f62a496/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and it names the decisive gap the evidence decides. The only opening has six signed orders at $450 (6 x $450 = $2,700; 5 deals = $2,250 would carry $2,000), cost $6 each and no capital, so price, volume, fulfilment (PRODUCE_SPREADSHEET proven) and economics all hold — but the signed terms are 'invoiced on filing, paid net 45 days', putting the first usable cash at ~day 46 against a 14-day window. That is a constraint, not missing evidence: even with every fact established, settled cash inside the window is $0. The revision cites SETTLES_IN_TIME as the decisive link, matches Brain's own verdict (deadline >= 46 days), and treats renegotiation to card-on-filing as an unmeasured possibility rather than assuming it.",
+    "findings": [
+     "Recomputed: 6 x $450 = $2,700 gross, 6 x $6 = $36 cost; minimum 5 deals ($2,250) for $2,000. Settlement: filing within 3 days of the driller's log + net 45 = ~day 46-48 > 14. Cash in window $0; ledger empty, consistent with the check trace.",
+     "Decisive link SETTLES_IN_TIME, constraint DEADLINE with basis timeToFirstCash: correct and cited to the card.",
+     "Renegotiation alternative is correctly held as an unknown (nothing on the record shows a driller accepts changed terms); the resolution's re-plan trigger (>=5 written agreements to card-on-filing) carries the target at 5 x $450 = $2,250.",
+     "Minor: the agreements are recorded by PERSON as WRITTEN_ACCEPTANCE; if re-planned as executable, the re-plan should also confirm when each driller's log arrives, since the 3-day filing clock starts from it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:59:48.813Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_61edda6a8a57_8ab75b",
+   "digest": "61edda6a8a57a22b3e91ced6",
+   "contractDigest": "7879d3e68126b17aca80eac3",
+   "plan": {
+    "goalId": "wst_91c848fbbf7243cba111",
+    "contractDigest": "7879d3e68126b17aca80eac3",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening settles after the 14-day deadline",
+     "opportunityIds": [],
+     "why": "The six signed well-closeout service orders ($450 each, $2,700 total) would cover the $2,000 target at no capital, but their signed terms are invoiced on filing and paid net 45 days, so the first usable cash arrives about day 46 against 14 days available. No other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Use the six signed drilling-contractor orders as written",
+      "why": "Rejected: net-45 terms put every receipt at ~day 46, after the 14-day window; settled cash inside the window is $0."
+     },
+     {
+      "title": "Renegotiate the six orders to card payment on filing",
+      "why": "Would make the opening executable, but nothing on the record shows any driller accepts changed terms; it must be asked and measured before a plan rests on it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six signed drilling-contractor owners by email whether they will pay each $450 closeout by card on filing instead of net 45, and record each written answer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_terms",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per closeout filing",
+      "status": "EVIDENCED",
+      "value": 45000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to first usable cash",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "days",
+      "sources": [
+       "s_ttc",
+       "s_terms"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#price",
+      "dated": "2026-11",
+      "claim": "Six drilling contractors signed service orders at $450 per well closeout filing",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Time to first cash is 46 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     },
+     {
+      "id": "s_terms",
+      "url": "https://brain.local/card/cop_17120eb00be24fce818e#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Signed terms: invoiced on filing, paid net 45 days",
+      "population": "Owners of water-well drilling companies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_17120eb00be24fce818e"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: the only opening's signed terms pay net 45 days after filing, so its $2,700 of signed orders settles about day 46, after the 14-day deadline; no cash settles inside the window.",
+     "resolution": "Either extend the deadline to at least 46 days (the signed orders then carry the target with no capital), or have Brain ask the six signed drillers to switch to card payment on filing; if at least five agree in writing, re-plan as executable.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_17120eb00be24fce818e",
+      "deals": 5,
+      "price": 450,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 46,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Extend the deadline from 14 to at least 46 days so the net-45 receipts on the six signed orders settle inside it",
+      "basis": [
+       {
+        "opportunityId": "cop_17120eb00be24fce818e",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_61edda6a8a57_8ab75b",
+    "digest": "61edda6a8a57a22b3e91ced6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_44875bb01b5245c5ae8b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:25.312Z"
+   },
+   "review": {
+    "revisionId": "rev_61edda6a8a57_8ab75b",
+    "revisionDigest": "61edda6a8a57a22b3e91ced6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_44875bb01b5245c5ae8b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b4f51f6e54e94f62a496/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and it names the decisive gap the evidence decides. The only opening has six signed orders at $450 (6 x $450 = $2,700; 5 deals = $2,250 would carry $2,000), cost $6 each and no capital, so price, volume, fulfilment (PRODUCE_SPREADSHEET proven) and economics all hold — but the signed terms are 'invoiced on filing, paid net 45 days', putting the first usable cash at ~day 46 against a 14-day window. That is a constraint, not missing evidence: even with every fact established, settled cash inside the window is $0. The revision cites SETTLES_IN_TIME as the decisive link, matches Brain's own verdict (deadline >= 46 days), and treats renegotiation to card-on-filing as an unmeasured possibility rather than assuming it.",
+    "findings": [
+     "Recomputed: 6 x $450 = $2,700 gross, 6 x $6 = $36 cost; minimum 5 deals ($2,250) for $2,000. Settlement: filing within 3 days of the driller's log + net 45 = ~day 46-48 > 14. Cash in window $0; ledger empty, consistent with the check trace.",
+     "Decisive link SETTLES_IN_TIME, constraint DEADLINE with basis timeToFirstCash: correct and cited to the card.",
+     "Renegotiation alternative is correctly held as an unknown (nothing on the record shows a driller accepts changed terms); the resolution's re-plan trigger (>=5 written agreements to card-on-filing) carries the target at 5 x $450 = $2,250.",
+     "Minor: the agreements are recorded by PERSON as WRITTEN_ACCEPTANCE; if re-planned as executable, the re-plan should also confirm when each driller's log arrives, since the 3-day filing clock starts from it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:59:48.813Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+    "terms": "7093e005c2b69fed",
+    "openings": {
+     "cop_17120eb00be24fce818e": "1e6c4cfafa42217d"
+    }
+   },
+   "at": "2026-11-28T06:01:43.079Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

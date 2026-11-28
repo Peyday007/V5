@@ -1,0 +1,1072 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_9c8b661936aa43629f1f",
+   "words": "Collect $6,000 of settled cash within 40 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 40,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$6,000 of settled cash received within 40 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "e1488643c65aef7eb3ef8773"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_9c8b661936aa43629f1f",
+    "contractDigest": "e1488643c65aef7eb3ef8773",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a certified medical-gas verifier is engaged",
+     "opportunityIds": [],
+     "why": "Three project managers accepted in writing at $2,800 each ($8,400, above the $6,000 target), the price matches published verifier rate sheets, and payment 15 days after the report fits the 40-day window. But the work must be performed on site by a certified medical-gas verifier; the card says none has been engaged or quoted and Brain cannot perform on-site testing. With no fulfiller, nothing can be delivered and nothing collected."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the verifications with Brain",
+      "why": "Impossible: the record says Brain cannot perform on-site testing and the verifier must be certified."
+     }
+    ],
+    "steps": [
+     {
+      "id": "find_verifier",
+      "kind": "RESEARCH",
+      "label": "Identify certified medical-gas verifiers serving the clinics' area and obtain written quotes and availability for three single-zone verifications by day 20",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "agreed revenue",
+      "status": "EVIDENCED",
+      "value": 8400,
+      "unit": "USD (3 written acceptances x $2,800)",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "verifier engaged",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "certified verifiers under quote",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": "a certified verifier's written quote and schedule"
+     },
+     {
+      "name": "subcontract cost per verification",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_cost",
+       "s_scope"
+      ],
+      "needs": "the engaged verifier's quote (card lists $1,400 but says no verifier has quoted)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#price",
+      "dated": "2026-10",
+      "claim": "Published rate sheets of two regional verifiers quote $2,800 for a single-zone outpatient clinic system (2026-10).",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#directCosts",
+      "dated": "2026-11",
+      "claim": "$1,400 direct cost listed.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "15 days to cash after the verification report.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: the verification must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing — so the three signed $2,800 orders cannot be delivered.",
+     "resolution": "Brain sources certified medical-gas verifiers covering the clinics' locations and obtains written quotes (target at or below $1,400 per single-zone job) with availability to issue all three reports by about day 20, so payment 15 days later lands inside the 40-day window; then re-plan as executable on the three signed acceptances.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_7d93d9a6c98f_0034db",
+    "digest": "7d93d9a6c98fea6fd1304fc4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:21.068Z"
+   },
+   {
+    "goalId": "wst_9c8b661936aa43629f1f",
+    "contractDigest": "e1488643c65aef7eb3ef8773",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a certified medical-gas verifier is engaged",
+     "opportunityIds": [],
+     "why": "Three project managers accepted in writing at $2,800 each ($8,400, above the $6,000 target), the price matches published verifier rate sheets, and payment 15 days after the report fits the 40-day window. But the work must be performed on site by a certified medical-gas verifier; the card says none has been engaged or quoted and Brain cannot perform on-site testing. With no fulfiller, nothing can be delivered and nothing collected."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the verifications with Brain",
+      "why": "Impossible: the record says Brain cannot perform on-site testing and the verifier must be certified."
+     }
+    ],
+    "steps": [
+     {
+      "id": "find_verifier",
+      "kind": "RESEARCH",
+      "label": "Identify certified medical-gas verifiers serving the clinics' area and obtain written quotes and availability for three single-zone verifications by day 20",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "agreed revenue",
+      "status": "EVIDENCED",
+      "value": 8400,
+      "unit": "USD (3 written acceptances x $2,800)",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "verifier engaged",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "certified verifiers under quote",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": "a certified verifier's written quote and schedule"
+     },
+     {
+      "name": "subcontract cost per verification",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_cost",
+       "s_scope"
+      ],
+      "needs": "the engaged verifier's quote (card lists $1,400 but says no verifier has quoted)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#price",
+      "dated": "2026-10",
+      "claim": "Published rate sheets of two regional verifiers quote $2,800 for a single-zone outpatient clinic system (2026-10).",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#directCosts",
+      "dated": "2026-11",
+      "claim": "$1,400 direct cost listed.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "15 days to cash after the verification report.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: the verification must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing — so the three signed $2,800 orders cannot be delivered.",
+     "resolution": "Brain sources certified medical-gas verifiers covering the clinics' locations and obtains written quotes (target at or below $1,400 per single-zone job) with availability to issue all three reports by about day 20, so payment 15 days later lands inside the 40-day window; then re-plan as executable on the three signed acceptances.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "deals": 3,
+      "price": 2800,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_bd98c707315a_8577fa",
+    "digest": "bd98c707315a3bbe982d5591",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:26.743Z"
+   },
+   {
+    "goalId": "wst_9c8b661936aa43629f1f",
+    "contractDigest": "e1488643c65aef7eb3ef8773",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a certified medical-gas verifier is engaged",
+     "opportunityIds": [],
+     "why": "Three project managers accepted in writing at $2,800 each ($8,400, above the $6,000 target), the price matches published verifier rate sheets, and payment 15 days after the report fits the 40-day window. But the work must be performed on site by a certified medical-gas verifier; the card says none has been engaged or quoted and Brain cannot perform on-site testing. With no fulfiller, nothing can be delivered and nothing collected."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the verifications with Brain",
+      "why": "Impossible: the record says Brain cannot perform on-site testing and the verifier must be certified."
+     }
+    ],
+    "steps": [
+     {
+      "id": "find_verifier",
+      "kind": "RESEARCH",
+      "label": "Identify certified medical-gas verifiers serving the clinics' area and obtain written quotes and availability for three single-zone verifications by day 20",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "agreed revenue",
+      "status": "EVIDENCED",
+      "value": 8400,
+      "unit": "USD (3 written acceptances x $2,800)",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "verifier engaged",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "certified verifiers under quote",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": "a certified verifier's written quote and schedule"
+     },
+     {
+      "name": "subcontract cost per verification",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_cost",
+       "s_scope"
+      ],
+      "needs": "the engaged verifier's quote (card lists $1,400 but says no verifier has quoted)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#price",
+      "dated": "2026-10",
+      "claim": "Published rate sheets of two regional verifiers quote $2,800 for a single-zone outpatient clinic system (2026-10).",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#directCosts",
+      "dated": "2026-11",
+      "claim": "$1,400 direct cost listed.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "15 days to cash after the verification report.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: the verification must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing — so the three signed $2,800 orders cannot be delivered.",
+     "resolution": "Brain sources certified medical-gas verifiers covering the clinics' locations and obtains written quotes (target at or below $1,400 per single-zone job) with availability to issue all three reports by about day 20, so payment 15 days later lands inside the 40-day window; then re-plan as executable on the three signed acceptances.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "deals": 3,
+      "price": 2800,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": 35,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_729547fa4aa6_83c7b7",
+    "digest": "729547fa4aa6fdc3bb793af8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:32.529Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_9c8b661936aa43629f1f",
+   "contractDigest": "e1488643c65aef7eb3ef8773",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until a certified medical-gas verifier is engaged",
+    "opportunityIds": [],
+    "why": "Three project managers accepted in writing at $2,800 each ($8,400, above the $6,000 target), the price matches published verifier rate sheets, and payment 15 days after the report fits the 40-day window. But the work must be performed on site by a certified medical-gas verifier; the card says none has been engaged or quoted and Brain cannot perform on-site testing. With no fulfiller, nothing can be delivered and nothing collected."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the verifications with Brain",
+     "why": "Impossible: the record says Brain cannot perform on-site testing and the verifier must be certified."
+    }
+   ],
+   "steps": [
+    {
+     "id": "find_verifier",
+     "kind": "RESEARCH",
+     "label": "Identify certified medical-gas verifiers serving the clinics' area and obtain written quotes and availability for three single-zone verifications by day 20",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_scope"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "agreed revenue",
+     "status": "EVIDENCED",
+     "value": 8400,
+     "unit": "USD (3 written acceptances x $2,800)",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "verifier engaged",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "certified verifiers under quote",
+     "sources": [
+      "s_scope"
+     ],
+     "needs": "a certified verifier's written quote and schedule"
+    },
+    {
+     "name": "subcontract cost per verification",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_cost",
+      "s_scope"
+     ],
+     "needs": "the engaged verifier's quote (card lists $1,400 but says no verifier has quoted)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_scope",
+     "url": "https://brain.local/card/cop_8c529faa96794fba9c19#captureMechanism",
+     "dated": "2026-11",
+     "claim": "Must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing.",
+     "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8c529faa96794fba9c19"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_8c529faa96794fba9c19#price",
+     "dated": "2026-10",
+     "claim": "Published rate sheets of two regional verifiers quote $2,800 for a single-zone outpatient clinic system (2026-10).",
+     "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8c529faa96794fba9c19"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_8c529faa96794fba9c19#directCosts",
+     "dated": "2026-11",
+     "claim": "$1,400 direct cost listed.",
+     "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8c529faa96794fba9c19"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_8c529faa96794fba9c19#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "15 days to cash after the verification report.",
+     "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8c529faa96794fba9c19"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No fulfiller: the verification must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing — so the three signed $2,800 orders cannot be delivered.",
+    "resolution": "Brain sources certified medical-gas verifiers covering the clinics' locations and obtains written quotes (target at or below $1,400 per single-zone job) with availability to issue all three reports by about day 20, so payment 15 days later lands inside the 40-day window; then re-plan as executable on the three signed acceptances.",
+    "decisiveLinks": [
+     "FULFILMENT"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_8c529faa96794fba9c19",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_8c529faa96794fba9c19",
+     "deals": 3,
+     "price": 2800,
+     "directCost": null,
+     "capital": 0,
+     "settlesDay": 35,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_729547fa4aa6_83c7b7",
+   "digest": "729547fa4aa6fdc3bb793af8",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ba6fe9318f7848a69f57/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:59:32.529Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_729547fa4aa6_83c7b7",
+   "digest": "729547fa4aa6fdc3bb793af8",
+   "contractDigest": "e1488643c65aef7eb3ef8773",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Third-party medical-gas system verification for plumbing con\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4200× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Project managers at commercial plumbing contrac\" needs [figure withheld] and keeps [figure withheld], 337× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Third-party medical-gas system verification for plumbing contractors f\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_8c529faa96794fba9c19"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+      "owner": "PERSON",
+      "cost": 1400
+     },
+     {
+      "label": "Collect payment for \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish who would do the work for \"Third-party medical-gas system verification for plumbing contractors finishing c\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+    "openings": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "title": "Third-party medical-gas system verification for plumbing contractors finishing clinic build-outs",
+      "missing": [
+       "FULFILMENT"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Project managers at commercial plumbing contractors",
+       "reachableChannel": "The three project managers, who signed by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:06.237Z",
+       "offerScope": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+       "priceCents": 280000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "plumbing contractors",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 280000,
+        "currency": "USD",
+        "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 280000,
+        "currency": "USD",
+        "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 280000,
+        "currency": "USD",
+        "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three project managers, who signed by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 8400 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 8400 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 1400, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "15 days to usable cash against 40 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1400",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Project managers at commercial plumbing contractors",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Published rate sheets of two regional medical-gas verifiers quote $2,800 for verifying a single-zone outpatient clinic system (2026-10).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "15 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_2df03a9ab3d94d2cb86c"
+    ],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 40,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:55:43.413Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_729547fa4aa6_83c7b7",
+    "revisionDigest": "729547fa4aa6fdc3bb793af8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_5459df2057e9424d853c/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and names the decisive gap the evidence decides: FULFILMENT. The card itself says the work must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing; Brain's own link agrees ('nobody has established who would do the work'). Buyers, price (three written acceptances at $2,800), and settlement (15 days after report) are otherwise in place, so the plan correctly does not take on more orders and does not treat the unknown verifier or its cost as known.",
+    "findings": [
+     "Recomputed: 3 x $2,800 = $8,400 gross collected >= $6,000. Settlement: reports by ~day 20 + 15 days = ~day 35 <= 40.",
+     "Economics caution for the re-plan: the card's price fact is two verifiers' own published rate sheets at $2,800 for exactly this job. That makes the $1,400 subcontract cost (and the resolution's 'target at or below $1,400') doubtful — a certified verifier is evidenced as charging ~$2,800, which would leave ~$0 margin. If the verifier must be paid before the contractors pay (no capital allowed, exposure cap $0), the payment terms with the verifier also decide feasibility. The re-plan must establish the verifier's quote and payment timing, not assume $1,400.",
+     "If the goal is read as net cash kept, 3 x ($2,800 - $1,400) = $4,200 < $6,000 even at the card's cost; gross settled receipts of $8,400 do reach it. The re-plan should state which it relies on.",
+     "Decisive link FULFILMENT and the resolution (source certified verifiers with written quotes and schedule by ~day 20) are the right next step; no buyer order is taken before fulfilment is shown possible."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:01:34.581Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_729547fa4aa6_83c7b7",
+   "digest": "729547fa4aa6fdc3bb793af8",
+   "contractDigest": "e1488643c65aef7eb3ef8773",
+   "plan": {
+    "goalId": "wst_9c8b661936aa43629f1f",
+    "contractDigest": "e1488643c65aef7eb3ef8773",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a certified medical-gas verifier is engaged",
+     "opportunityIds": [],
+     "why": "Three project managers accepted in writing at $2,800 each ($8,400, above the $6,000 target), the price matches published verifier rate sheets, and payment 15 days after the report fits the 40-day window. But the work must be performed on site by a certified medical-gas verifier; the card says none has been engaged or quoted and Brain cannot perform on-site testing. With no fulfiller, nothing can be delivered and nothing collected."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the verifications with Brain",
+      "why": "Impossible: the record says Brain cannot perform on-site testing and the verifier must be certified."
+     }
+    ],
+    "steps": [
+     {
+      "id": "find_verifier",
+      "kind": "RESEARCH",
+      "label": "Identify certified medical-gas verifiers serving the clinics' area and obtain written quotes and availability for three single-zone verifications by day 20",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "agreed revenue",
+      "status": "EVIDENCED",
+      "value": 8400,
+      "unit": "USD (3 written acceptances x $2,800)",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "verifier engaged",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "certified verifiers under quote",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": "a certified verifier's written quote and schedule"
+     },
+     {
+      "name": "subcontract cost per verification",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_cost",
+       "s_scope"
+      ],
+      "needs": "the engaged verifier's quote (card lists $1,400 but says no verifier has quoted)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#price",
+      "dated": "2026-10",
+      "claim": "Published rate sheets of two regional verifiers quote $2,800 for a single-zone outpatient clinic system (2026-10).",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#directCosts",
+      "dated": "2026-11",
+      "claim": "$1,400 direct cost listed.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_8c529faa96794fba9c19#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "15 days to cash after the verification report.",
+      "population": "Project managers at commercial plumbing contractors finishing clinic build-outs (the three who signed)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8c529faa96794fba9c19"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: the verification must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing — so the three signed $2,800 orders cannot be delivered.",
+     "resolution": "Brain sources certified medical-gas verifiers covering the clinics' locations and obtains written quotes (target at or below $1,400 per single-zone job) with availability to issue all three reports by about day 20, so payment 15 days later lands inside the 40-day window; then re-plan as executable on the three signed acceptances.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_8c529faa96794fba9c19",
+      "deals": 3,
+      "price": 2800,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": 35,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_729547fa4aa6_83c7b7",
+    "digest": "729547fa4aa6fdc3bb793af8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:32.529Z"
+   },
+   "review": {
+    "revisionId": "rev_729547fa4aa6_83c7b7",
+    "revisionDigest": "729547fa4aa6fdc3bb793af8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ba6fe9318f7848a69f57/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_5459df2057e9424d853c/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and names the decisive gap the evidence decides: FULFILMENT. The card itself says the work must be done on site by a certified medical-gas verifier, none has been engaged or quoted, and Brain cannot perform on-site testing; Brain's own link agrees ('nobody has established who would do the work'). Buyers, price (three written acceptances at $2,800), and settlement (15 days after report) are otherwise in place, so the plan correctly does not take on more orders and does not treat the unknown verifier or its cost as known.",
+    "findings": [
+     "Recomputed: 3 x $2,800 = $8,400 gross collected >= $6,000. Settlement: reports by ~day 20 + 15 days = ~day 35 <= 40.",
+     "Economics caution for the re-plan: the card's price fact is two verifiers' own published rate sheets at $2,800 for exactly this job. That makes the $1,400 subcontract cost (and the resolution's 'target at or below $1,400') doubtful — a certified verifier is evidenced as charging ~$2,800, which would leave ~$0 margin. If the verifier must be paid before the contractors pay (no capital allowed, exposure cap $0), the payment terms with the verifier also decide feasibility. The re-plan must establish the verifier's quote and payment timing, not assume $1,400.",
+     "If the goal is read as net cash kept, 3 x ($2,800 - $1,400) = $4,200 < $6,000 even at the card's cost; gross settled receipts of $8,400 do reach it. The re-plan should state which it relies on.",
+     "Decisive link FULFILMENT and the resolution (source certified verifiers with written quotes and schedule by ~day 20) are the right next step; no buyer order is taken before fulfilment is shown possible."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:01:34.581Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 40 days using no up-front capital.",
+    "terms": "d1cbf399d00adf0c",
+    "openings": {
+     "cop_8c529faa96794fba9c19": "0cd6b50ece0a40b2"
+    }
+   },
+   "at": "2026-11-28T06:02:10.607Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

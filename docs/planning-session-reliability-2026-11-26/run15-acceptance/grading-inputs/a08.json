@@ -1,0 +1,173 @@
+{
+ "caseId": "av-08-yoga-owner-teaches-over-hours",
+ "keys": {
+  "cop_e18c9615ba554303b87b": "corporateYoga"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "No found opening is far enough along to model; 7 constructed estimate(s) were modelled: the best combination (1 of them) reaches the target in 69.7% of worlds, which is coverage of assumed inputs, not a probability, and settles a median USD 5,586 against the USD 3,000 target. The reconstruction is hypothetical: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5277× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: HR and wellness coordinators at local employers\" needs [figure withheld] and keeps [figure withheld], 958× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted.",
+  "acceptance": "NO_CANDIDATE",
+  "considered": [],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach HR and wellness coordinators at local employers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with HR and wellness coordinators at local employers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Find an independent provider who performs \"Eight-session lunchtime yoga programmes taught on site by the owner\" for its buyers, at a quoted cost a deal: the card names the owner doing physical work, which the owner does not do.",
+  "openings": [],
+  "excluded": [
+   {
+    "opportunityId": "cop_e18c9615ba554303b87b",
+    "title": "Eight-session lunchtime yoga programmes taught on site by the owner",
+    "reason": "needs the owner's physical work: the service (\"on site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "HR and wellness coordinators at local employers",
+     "reachableChannel": "The four coordinators who signed programme agreements",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:34.733Z",
+     "offerScope": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+     "priceCents": 96000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 12,
+     "requiredCapabilities": [],
+     "industry": "yoga studios",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 96000,
+      "currency": "USD",
+      "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 96000,
+      "currency": "USD",
+      "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 96000,
+      "currency": "USD",
+      "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 96000,
+      "currency": "USD",
+      "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "HR and wellness coordinators at local employers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four employers signed eight-session programme agreements at $960 each (signed agreements, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "33 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 35,
+   "hoursCeiling": 20,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-28T05:56:16.078Z"
+ }
+}

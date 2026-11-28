@@ -1,0 +1,2232 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_9691683062d64089b529",
+   "words": "Turn $2,500 into at least $12,000 of collected cash within 30 days. Any industry is fine.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "COLLECTED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": 250000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "$12,000 collected cash within 30 days, from at most $2,500 put in",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "c0eb31280aed10461360fec9"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_9691683062d64089b529",
+    "contractDigest": "c0eb31280aed10461360fec9",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no discovered route is shown to turn $2,500 into $12,000 collected in 30 days",
+     "opportunityIds": [],
+     "why": "The strongest route (cold-emailed $1,000 websites for local businesses, built by a ~$250 Fiverr designer) needs 12 paid sales in 30 days, but no buyer is shown paying ~$1,000 for this offer (the only price evidence is an agency range of $100-$5,000) and no close rate is measured. Its Instantly channel cannot even start at volume in time: new inboxes need at least 2 weeks of warmup before campaigns. Freelancer.com requests clear at ~$140-$450 against 17-490 bids (35 wins needed), and DataAnnotation is a wage, not a sale."
+    },
+    "alternatives": [
+     {
+      "title": "Bid on Freelancer.com website requests, Fiverr designer fulfils",
+      "why": "Budgets ~INR 12,500-37,500 (~$140-$420) with 17-490 competing bids; 35 awards and milestone releases in 30 days is not established."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Excluded: hourly pay for the owner's labour is a wage, not a price a buyer pays; $12,000 would also take 240-480 owner hours from a payer that does not guarantee work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Experiment: owner sends 50/day plain emails from his existing mailbox (no warmup needed) to 350 local service businesses with no website, offering a $1,000 5-page site, 50% deposit (days 0-7)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch",
+       "src_webfx"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OTHER",
+      "label": "Decide on day 8: 3+ paid $500 deposits from 350 contacts -> order each build from a Fiverr designer and continue to 1,500 contacts; fewer -> stop",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay for a cold-emailed local-business website",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "paid deposits at $1,000"
+     },
+     {
+      "name": "close rate from cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [
+       "src_instantly"
+      ],
+      "needs": ">= 3 paid of 350 contacts (0.86%), the rate 12 sales from ~1,500 contacts requires"
+     },
+     {
+      "name": "sales needed",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [],
+      "needs": "$12,000 / $1,000"
+     },
+     {
+      "name": "inbox warmup before campaigns",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "src_warmup"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+      "dated": "2026",
+      "claim": "Average cold-email reply rate 3.43% (replies, not sales)",
+      "population": "Instantly senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_warmup",
+      "url": "https://instantly.ai/blog/warm-up-email-domain/",
+      "dated": "2026-11-28",
+      "claim": "Plan at least 2 weeks of warmup for new inboxes; 4 weeks safer for brand-new domains",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457, 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/web-development/business-website-development-40838854",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 17 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_31d50e0a64114a8bb5dd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer is shown paying ~$1,000 for a cold-emailed local-business website, and no close rate is measured; 12 such sales in 30 days (and a warmed cold-email channel, which itself needs 2+ weeks) is therefore not established.",
+     "resolution": "Run a $0, 7-day experiment from the owner's existing mailbox: 350 local service businesses without a website, $1,000 site, 50% deposit. Proof: >= 3 paid $500 deposits by day 8 (0.86%, the rate 12 sales from ~1,500 contacts needs) -> order the builds from a Fiverr designer (~$250 each, paid from the deposits, inside the $2,500 cap) and continue. Stop: fewer than 3 deposits by day 8, or replies rejecting the price.",
+     "decisiveLinks": [
+      "CONVERSION",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "why": "Hourly pay for the owner's own labour is a wage, not a price a buyer pays for an offer."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "deals": 12,
+      "price": 1000,
+      "directCost": 250,
+      "capital": 400,
+      "settlesDay": null,
+      "ownerHours": 6
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "deals": 35,
+      "price": 350,
+      "directCost": 150,
+      "capital": 50,
+      "settlesDay": null,
+      "ownerHours": 35
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_4dacb728054c_cf42db",
+    "digest": "4dacb728054cd383081381bb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:05:58.544Z"
+   },
+   {
+    "goalId": "wst_9691683062d64089b529",
+    "contractDigest": "c0eb31280aed10461360fec9",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no discovered route is shown to turn $2,500 into $12,000 collected in 30 days",
+     "opportunityIds": [],
+     "why": "The strongest route (cold-emailed $1,000 websites for local businesses, built by a ~$250 Fiverr designer) needs 12 paid sales in 30 days, but no buyer is shown paying ~$1,000 for this offer (the only price evidence is an agency range of $100-$5,000) and no close rate is measured. Its Instantly channel cannot even start at volume in time: new inboxes need at least 2 weeks of warmup before campaigns. Freelancer.com requests clear at ~$140-$450 against 17-490 bids (35 wins needed), and DataAnnotation is a wage, not a sale."
+    },
+    "alternatives": [
+     {
+      "title": "Bid on Freelancer.com website requests, Fiverr designer fulfils",
+      "why": "Budgets ~INR 12,500-37,500 (~$140-$420) with 17-490 competing bids; 35 awards and milestone releases in 30 days is not established."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Excluded: hourly pay for the owner's labour is a wage, not a price a buyer pays; $12,000 would also take 240-480 owner hours from a payer that does not guarantee work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t0",
+      "kind": "TEST",
+      "label": "Before any offer: message 3 Fiverr WordPress designers for written quotes (price, 5-page scope, delivery days, capacity for 12 sites in 3 weeks); proceed only with one confirming <= $300 and <= 5 days",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_fiverr"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Experiment: owner sends 50/day plain emails from his existing mailbox (no warmup needed) to 350 local service businesses with no website, offering a $1,000 5-page site, 50% deposit (days 0-7)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "t0",
+      "evidence": [
+       "src_clutch",
+       "src_webfx"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OTHER",
+      "label": "Decide on day 8: 3+ paid $500 deposits from 350 contacts -> order each build from a Fiverr designer and continue to 1,500 contacts; fewer -> stop",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay for a cold-emailed local-business website",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "paid deposits at $1,000"
+     },
+     {
+      "name": "close rate from cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 3 paid of 350 contacts (0.86%), the rate 12 sales from ~1,500 contacts requires"
+     },
+     {
+      "name": "sales needed",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [],
+      "needs": "$12,000 / $1,000"
+     },
+     {
+      "name": "inbox warmup before campaigns",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "src_warmup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor price and capacity per site",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD and sites/week",
+      "sources": [
+       "src_fiverr"
+      ],
+      "needs": "written quote <= $300, <= 5 days, 12 sites in 3 weeks"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+      "dated": "2026",
+      "claim": "Average cold-email reply rate 3.43% (replies, not sales)",
+      "population": "Instantly senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_warmup",
+      "url": "https://instantly.ai/blog/warm-up-email-domain/",
+      "dated": "2026-11-28",
+      "claim": "Plan at least 2 weeks of warmup for new inboxes; 4 weeks safer for brand-new domains",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457, 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/web-development/business-website-development-40838854",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 17 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_31d50e0a64114a8bb5dd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer is shown paying ~$1,000 for a cold-emailed local-business website, and no close rate is measured; 12 such sales in 30 days (and a warmed cold-email channel, which itself needs 2+ weeks) is therefore not established.",
+     "resolution": "Day 0-1 ($0): get written quotes from 3 Fiverr WordPress designers (<= $300/site, <= 5 days, capacity for 12 sites in 3 weeks) - this measures FULFILMENT before any order is taken. Then days 1-7 ($0): from the owner's existing mailbox email 350 local service businesses without a website, $1,000 site, 50% deposit. Proof: a confirmed designer and >= 3 paid $500 deposits by day 8 (0.86%, the rate 12 sales from ~1,500 contacts needs) -> order the builds (~$250 each, paid from deposits, inside the $2,500 cap) and continue. Stop: no designer confirms, or fewer than 3 deposits by day 8, or replies rejecting the price.",
+     "decisiveLinks": [
+      "CONVERSION",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "why": "Hourly pay for the owner's own labour is a wage, not a price a buyer pays for an offer."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "deals": 12,
+      "price": 1000,
+      "directCost": 250,
+      "capital": 400,
+      "settlesDay": null,
+      "ownerHours": 6
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "deals": 35,
+      "price": 350,
+      "directCost": 150,
+      "capital": 50,
+      "settlesDay": null,
+      "ownerHours": 35
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_02b2865f3333_329b2b",
+    "digest": "02b2865f33337e18a3b48faa",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:10.000Z"
+   },
+   {
+    "goalId": "wst_9691683062d64089b529",
+    "contractDigest": "c0eb31280aed10461360fec9",
+    "parentRevisionId": "rev_02b2865f3333_329b2b",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no discovered route is shown to turn $2,500 into $12,000 collected in 30 days",
+     "opportunityIds": [],
+     "why": "The strongest route (cold-emailed $1,000 websites for local businesses, built by a ~$250 Fiverr designer) needs 12 paid sales in 30 days, but no buyer is shown paying ~$1,000 for this offer (the only price evidence is an agency range of $100-$5,000) and no close rate is measured. Its Instantly channel cannot even start at volume in time: new inboxes need at least 2 weeks of warmup before campaigns. Freelancer.com requests clear at ~$140-$450 against 17-490 bids (35 wins needed), and DataAnnotation is a wage, not a sale."
+    },
+    "alternatives": [
+     {
+      "title": "Bid on Freelancer.com website requests, Fiverr designer fulfils",
+      "why": "Budgets ~INR 12,500-37,500 (~$140-$420) with 17-490 competing bids; 35 awards and milestone releases in 30 days is not established."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Excluded: 240-480 owner hours in 30 days from a payer that does not guarantee work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t0",
+      "kind": "TEST",
+      "label": "Before any offer: message 3 Fiverr WordPress designers for written quotes (price, 5-page scope, delivery days, capacity for 12 sites in 3 weeks); proceed only with one confirming <= $300 and <= 5 days",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_fiverr"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Experiment: owner sends ~50/day plain emails from his existing mailbox to 350 local service businesses with no website, offering a $1,000 5-page site, 50% deposit (days 1-7); bounces and spam placement are logged as the channel's own measurement",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "t0",
+      "evidence": [
+       "src_clutch",
+       "src_webfx"
+      ],
+      "ownerHours": 10.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OTHER",
+      "label": "Decide on day 8: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) from 350 contacts -> continue to ~500 more contacts by day 17 (850 total), order each build only after its own deposit, collect balances by day 25; fewer -> stop",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay for a cold-emailed local-business website",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "paid deposits at $1,000"
+     },
+     {
+      "name": "close rate from cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 5 paid of 350 contacts (1.4%), the rate at which the ~850 contacts reachable by day 17 yield 12 sales with time to build (5 days) and collect balances by day 25"
+     },
+     {
+      "name": "sales needed",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [],
+      "needs": "$12,000 / $1,000"
+     },
+     {
+      "name": "inbox warmup before campaigns",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "src_warmup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor price and capacity per site",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD and sites/week",
+      "sources": [
+       "src_fiverr"
+      ],
+      "needs": "written quote <= $300, <= 5 days, 12 sites in 3 weeks"
+     },
+     {
+      "name": "owner mailbox deliverability at 50/day",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "share delivered",
+      "sources": [],
+      "needs": "bounce < 3% and replies arriving during days 1-7"
+     },
+     {
+      "name": "contacts reachable by day 17",
+      "status": "ESTIMATE",
+      "value": 850,
+      "unit": "contacts",
+      "sources": [],
+      "needs": "50/day for 17 days"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+      "dated": "2026",
+      "claim": "Average cold-email reply rate 3.43% (replies, not sales)",
+      "population": "Instantly senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_warmup",
+      "url": "https://instantly.ai/blog/warm-up-email-domain/",
+      "dated": "2026-11-28",
+      "claim": "Plan at least 2 weeks of warmup for new inboxes; 4 weeks safer for brand-new domains",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457, 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/web-development/business-website-development-40838854",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 17 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_31d50e0a64114a8bb5dd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer is shown paying ~$1,000 for a cold-emailed local-business website, and no close rate is measured; 12 such sales in 30 days (and a warmed cold-email channel, which itself needs 2+ weeks) is therefore not established.",
+     "resolution": "Day 0-1 ($0): get written quotes from 3 Fiverr WordPress designers (<= $300/site, <= 5 days, capacity for 12 sites in 3 weeks) - this measures FULFILMENT before any order is taken. Days 1-7 ($0, ~1.5 owner hours/day): from the owner's existing mailbox email 350 local service businesses without a website, $1,000 site, 50% deposit; log bounces and spam placement (its deliverability at 50/day is itself unmeasured). Proof, in collected cash: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) by day 8 = 1.4%, the rate at which the ~850 contacts reachable at 50/day by day 17 give 12 sales, leaving 5 days to build and balances collected by ~day 25. Continue: email ~500 more by day 17; order each build only after its own deposit has cleared (so 12 x ~$250 never exceeds the $2,500 cap at once). Stop: no designer confirms, fewer than 5 deposits by day 8, bounce rate over 3%, or replies rejecting the price. Even a 0.86% rate (3 of 350) would not reach $12,000 inside 30 days.",
+     "decisiveLinks": [
+      "CONVERSION",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Throughput arithmetic: 0.86% needs ~1,500 contacts, finishing day 30",
+      "resolution": "Accepted. Pass threshold raised to >= 5 deposits of 350 (1.4%), so 12 sales come from the ~850 contacts reachable by day 17, builds finish by ~day 22 and balances are collected by ~day 25; the resolution now says a 0.86% rate would not reach the target."
+     },
+     {
+      "finding": "'No warmup needed' for the owner's mailbox is unsourced; owner hours not stated",
+      "resolution": "Accepted. Claim removed; mailbox deliverability at 50/day is now an UNKNOWN quantity measured in the test (bounce/spam log, stop at >3% bounces), and owner hours are stated (~1.5 h/day, 10.5 h for the test)."
+     },
+     {
+      "finding": "Proof should be stated in collected cash",
+      "resolution": "Accepted. Proof is now >= $2,500 collected (5 paid $500 deposits) by day 8, and continuation requires all 12 balances collected by ~day 25."
+     },
+     {
+      "finding": "Capital: 12 builds x $250 exceeds the cap unless each waits for its deposit",
+      "resolution": "Accepted; the resolution states each build is ordered only after its own deposit has cleared."
+     },
+     {
+      "finding": "DataAnnotation exclusion basis",
+      "resolution": "Accepted. Exclusion now rests on its own record: 240-480 owner hours in 30 days and work availability not guaranteed by the payer's FAQ."
+     },
+     {
+      "finding": "Freelancer.com alternative correctly not adopted",
+      "resolution": "Agreed; unchanged."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "why": "Fails on its own record: $12,000 at the published $25-$50/h needs 240-480 owner hours in 30 days, and the payer's FAQ says work availability depends on demand and performance, so the volume is not available to plan on (Brain also classes it as owner wage rather than a sale)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "deals": 12,
+      "price": 1000,
+      "directCost": 250,
+      "capital": 400,
+      "settlesDay": null,
+      "ownerHours": 6
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "deals": 35,
+      "price": 350,
+      "directCost": 150,
+      "capital": 50,
+      "settlesDay": null,
+      "ownerHours": 35
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_56c5b1b79fd1_2128a2",
+    "digest": "56c5b1b79fd1b350eb862746",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:10:40.733Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_9691683062d64089b529",
+   "contractDigest": "c0eb31280aed10461360fec9",
+   "parentRevisionId": "rev_02b2865f3333_329b2b",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no discovered route is shown to turn $2,500 into $12,000 collected in 30 days",
+    "opportunityIds": [],
+    "why": "The strongest route (cold-emailed $1,000 websites for local businesses, built by a ~$250 Fiverr designer) needs 12 paid sales in 30 days, but no buyer is shown paying ~$1,000 for this offer (the only price evidence is an agency range of $100-$5,000) and no close rate is measured. Its Instantly channel cannot even start at volume in time: new inboxes need at least 2 weeks of warmup before campaigns. Freelancer.com requests clear at ~$140-$450 against 17-490 bids (35 wins needed), and DataAnnotation is a wage, not a sale."
+   },
+   "alternatives": [
+    {
+     "title": "Bid on Freelancer.com website requests, Fiverr designer fulfils",
+     "why": "Budgets ~INR 12,500-37,500 (~$140-$420) with 17-490 competing bids; 35 awards and milestone releases in 30 days is not established."
+    },
+    {
+     "title": "Hourly AI-training work on DataAnnotation",
+     "why": "Excluded: 240-480 owner hours in 30 days from a payer that does not guarantee work."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t0",
+     "kind": "TEST",
+     "label": "Before any offer: message 3 Fiverr WordPress designers for written quotes (price, 5-page scope, delivery days, capacity for 12 sites in 3 weeks); proceed only with one confirming <= $300 and <= 5 days",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_fiverr"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Experiment: owner sends ~50/day plain emails from his existing mailbox to 350 local service businesses with no website, offering a $1,000 5-page site, 50% deposit (days 1-7); bounces and spam placement are logged as the channel's own measurement",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "t0",
+     "evidence": [
+      "src_clutch",
+      "src_webfx"
+     ],
+     "ownerHours": 10.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "OTHER",
+     "label": "Decide on day 8: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) from 350 contacts -> continue to ~500 more contacts by day 17 (850 total), order each build only after its own deposit, collect balances by day 25; fewer -> stop",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "t1",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "price buyers pay for a cold-emailed local-business website",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "src_webfx"
+     ],
+     "needs": "paid deposits at $1,000"
+    },
+    {
+     "name": "close rate from cold email",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid sales per contact",
+     "sources": [],
+     "needs": ">= 5 paid of 350 contacts (1.4%), the rate at which the ~850 contacts reachable by day 17 yield 12 sales with time to build (5 days) and collect balances by day 25"
+    },
+    {
+     "name": "sales needed",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "sales",
+     "sources": [],
+     "needs": "$12,000 / $1,000"
+    },
+    {
+     "name": "inbox warmup before campaigns",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "src_warmup"
+     ],
+     "needs": null
+    },
+    {
+     "name": "subcontractor price and capacity per site",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD and sites/week",
+     "sources": [
+      "src_fiverr"
+     ],
+     "needs": "written quote <= $300, <= 5 days, 12 sites in 3 weeks"
+    },
+    {
+     "name": "owner mailbox deliverability at 50/day",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "share delivered",
+     "sources": [],
+     "needs": "bounce < 3% and replies arriving during days 1-7"
+    },
+    {
+     "name": "contacts reachable by day 17",
+     "status": "ESTIMATE",
+     "value": 850,
+     "unit": "contacts",
+     "sources": [],
+     "needs": "50/day for 17 days"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_clutch",
+     "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+     "dated": "2025-08-21",
+     "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_07bc35bd97b442ec8620"
+    },
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+     "dated": "2026-05-15",
+     "claim": "Agency price table: small business website $100 to $5,000",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_07bc35bd97b442ec8620"
+    },
+    {
+     "id": "src_instantly",
+     "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+     "dated": "2026",
+     "claim": "Average cold-email reply rate 3.43% (replies, not sales)",
+     "population": "Instantly senders",
+     "matchesBuyer": false,
+     "opportunityId": "cop_07bc35bd97b442ec8620"
+    },
+    {
+     "id": "src_warmup",
+     "url": "https://instantly.ai/blog/warm-up-email-domain/",
+     "dated": "2026-11-28",
+     "claim": "Plan at least 2 weeks of warmup for new inboxes; 4 weeks safer for brand-new domains",
+     "population": "cold email senders",
+     "matchesBuyer": false,
+     "opportunityId": "cop_07bc35bd97b442ec8620"
+    },
+    {
+     "id": "src_fiverr",
+     "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+     "dated": "2026-11-28",
+     "claim": "Fiverr WordPress business-site packages ~$100-$500",
+     "population": "Fiverr web designers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_07bc35bd97b442ec8620"
+    },
+    {
+     "id": "src_fl",
+     "url": "https://www.freelancer.com/jobs/website-design/",
+     "dated": "2026-11-27",
+     "claim": "355 open website-design requests; business-site average bids $214-$457, 100-490 bids each",
+     "population": "Freelancer.com clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_310fc6f240614a69b6e8"
+    },
+    {
+     "id": "src_fl2",
+     "url": "https://www.freelancer.com/projects/web-development/business-website-development-40838854",
+     "dated": "2026-11-28",
+     "claim": "Business website request, budget INR 12,500-37,500, 17 proposals",
+     "population": "Freelancer.com clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_310fc6f240614a69b6e8"
+    },
+    {
+     "id": "src_da",
+     "url": "https://www.dataannotation.tech/faq",
+     "dated": "2026",
+     "claim": "General projects start at $25-$50 per hour",
+     "population": "DataAnnotation workers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_31d50e0a64114a8bb5dd"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer is shown paying ~$1,000 for a cold-emailed local-business website, and no close rate is measured; 12 such sales in 30 days (and a warmed cold-email channel, which itself needs 2+ weeks) is therefore not established.",
+    "resolution": "Day 0-1 ($0): get written quotes from 3 Fiverr WordPress designers (<= $300/site, <= 5 days, capacity for 12 sites in 3 weeks) - this measures FULFILMENT before any order is taken. Days 1-7 ($0, ~1.5 owner hours/day): from the owner's existing mailbox email 350 local service businesses without a website, $1,000 site, 50% deposit; log bounces and spam placement (its deliverability at 50/day is itself unmeasured). Proof, in collected cash: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) by day 8 = 1.4%, the rate at which the ~850 contacts reachable at 50/day by day 17 give 12 sales, leaving 5 days to build and balances collected by ~day 25. Continue: email ~500 more by day 17; order each build only after its own deposit has cleared (so 12 x ~$250 never exceeds the $2,500 cap at once). Stop: no designer confirms, fewer than 5 deposits by day 8, bounce rate over 3%, or replies rejecting the price. Even a 0.86% rate (3 of 350) would not reach $12,000 inside 30 days.",
+    "decisiveLinks": [
+     "CONVERSION",
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Throughput arithmetic: 0.86% needs ~1,500 contacts, finishing day 30",
+     "resolution": "Accepted. Pass threshold raised to >= 5 deposits of 350 (1.4%), so 12 sales come from the ~850 contacts reachable by day 17, builds finish by ~day 22 and balances are collected by ~day 25; the resolution now says a 0.86% rate would not reach the target."
+    },
+    {
+     "finding": "'No warmup needed' for the owner's mailbox is unsourced; owner hours not stated",
+     "resolution": "Accepted. Claim removed; mailbox deliverability at 50/day is now an UNKNOWN quantity measured in the test (bounce/spam log, stop at >3% bounces), and owner hours are stated (~1.5 h/day, 10.5 h for the test)."
+    },
+    {
+     "finding": "Proof should be stated in collected cash",
+     "resolution": "Accepted. Proof is now >= $2,500 collected (5 paid $500 deposits) by day 8, and continuation requires all 12 balances collected by ~day 25."
+    },
+    {
+     "finding": "Capital: 12 builds x $250 exceeds the cap unless each waits for its deposit",
+     "resolution": "Accepted; the resolution states each build is ordered only after its own deposit has cleared."
+    },
+    {
+     "finding": "DataAnnotation exclusion basis",
+     "resolution": "Accepted. Exclusion now rests on its own record: 240-480 owner hours in 30 days and work availability not guaranteed by the payer's FAQ."
+    },
+    {
+     "finding": "Freelancer.com alternative correctly not adopted",
+     "resolution": "Agreed; unchanged."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_07bc35bd97b442ec8620",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_310fc6f240614a69b6e8",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME",
+      "MARKET_VOLUME"
+     ]
+    },
+    {
+     "opportunityId": "cop_31d50e0a64114a8bb5dd",
+     "missing": [
+      "CURRENT_DEMAND",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_31d50e0a64114a8bb5dd",
+     "why": "Fails on its own record: $12,000 at the published $25-$50/h needs 240-480 owner hours in 30 days, and the payer's FAQ says work availability depends on demand and performance, so the volume is not available to plan on (Brain also classes it as owner wage rather than a sale)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_07bc35bd97b442ec8620",
+     "deals": 12,
+     "price": 1000,
+     "directCost": 250,
+     "capital": 400,
+     "settlesDay": null,
+     "ownerHours": 6
+    },
+    {
+     "opportunityId": "cop_310fc6f240614a69b6e8",
+     "deals": 35,
+     "price": 350,
+     "directCost": 150,
+     "capital": 50,
+     "settlesDay": null,
+     "ownerHours": 35
+    }
+   ],
+   "resolves": [
+    "CONVERSION",
+    "OFFER_AND_PRICE",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_31d50e0a64114a8bb5dd",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+    },
+    {
+     "opportunityId": "cop_31d50e0a64114a8bb5dd",
+     "link": "ECONOMICS",
+     "reason": "$0 cost and $0 capital against a published hourly rate."
+    }
+   ],
+   "revisionId": "rev_56c5b1b79fd1_2128a2",
+   "digest": "56c5b1b79fd1b350eb862746",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7148cb397a814890a585/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:10:40.733Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_56c5b1b79fd1_2128a2",
+   "digest": "56c5b1b79fd1b350eb862746",
+   "contractDigest": "c0eb31280aed10461360fec9",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 250000,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Sell a retainer of 4 unit(s) at 15% off (×3.4 the unit price, ×4.0 its direct cost)) it would reach 0% (p50 $4,958): a hypothesis to test by running each one's kill criterion, not evidence.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_310fc6f240614a69b6e8",
+     "cop_07bc35bd97b442ec8620",
+     "cop_31d50e0a64114a8bb5dd"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "title": "Cold-emailed website build for US local service businesses without a site",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1000,
+      "card": {
+       "payer": "US local service business owner (no website or outdated site)",
+       "reachableChannel": "Cold email via Instantly from secondary domains to owners listed in public directories",
+       "offerScope": "Done-for-you 5-page business website, built by Brain with AI tooling, live in 5 days, first year hosting included",
+       "priceCents": 100000,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery)",
+       "peakFundingCents": 40000,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "Local services / web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email via Instantly from secondary domains to owners listed in public direc"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 250, tied up 400"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email via Instantly from secondary domains to owners listed in public directories",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Done-for-you 5-page business website, built by Brain with AI tooling, live in 5 days, first year hosting included to US local service business owner (no website or outdated site), reached through Cold email via Instantly from secondary domains to owners listed in public directories, at $1,000; Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$400",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Done-for-you 5-page business website, built by Brain with AI tooling, live in 5 days, first year hosting included",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service business owner (no website or outdated site)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/jobs/website-design/; https://www.webfx.com/web-design/pricing/website-costs; https://fiverr.com/farzanakhan_01/website-or-landing-page; https://www.fiverr.com/w0rdpressdesign/create-a-small-functional-website-for-you; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/cold-email-benchmark-report-2026; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "title": "Bid on posted website-build requests on Freelancer.com",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "B_EVIDENCED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Clients posting website-design projects on Freelancer.com",
+       "reachableChannel": "Freelancer.com bids",
+       "offerScope": "Build the requested business website / redesign with AI-assisted development",
+       "priceCents": 35000,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery)",
+       "peakFundingCents": 5000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Web development marketplace",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Freelancer.com bids"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "140 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "35 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 150, tied up 50"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Freelancer.com bids",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "355 Clients posting website-design projects on Freelancer.com (355 open Website Design jobs listed on Freelancer.com 2026-11-27, average bids 2-,415, typical business site 14-57, 100-490 bids each)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Build the requested business website / redesign with AI-assisted development to Clients posting website-design projects on Freelancer.com, reached through Freelancer.com bids, at $350; Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$50",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Build the requested business website / redesign with AI-assisted development",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Clients posting website-design projects on Freelancer.com",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$350",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$350",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/feesandcharges; https://fiverr.com/farzanakhan_01/website-or-landing-page; https://www.fiverr.com/w0rdpressdesign/create-a-small-functional-website-for-you; https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/jobs/website-design/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "title": "AI-training evaluation work on DataAnnotation, paid hourly via PayPal",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "DataAnnotation (AI training data company)",
+       "reachableChannel": "DataAnnotation worker application and Starter Assessment",
+       "offerScope": "Hourly evaluation of chatbot responses / code by the owner",
+       "priceCents": 2500,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "AI data annotation",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: DataAnnotation worker application and Starter Assessment"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 25 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "DataAnnotation worker application and Starter Assessment",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1 DataAnnotation (AI training data company) (One payer; per-hour 'sale'; work availability not guaranteed per FAQ)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Hourly evaluation of chatbot responses / code by the owner to DataAnnotation (AI training data company), reached through DataAnnotation worker application and Starter Assessment, at $25; Owner delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Hourly evaluation of chatbot responses / code by the owner",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "DataAnnotation (AI training data company)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$25",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "DataAnnotation publishes its pay for general AI-training projects as starting at $25-$50 per hour, paid via PayPal, with deposits delivered within a few days of a payout request; work availability is not guaranteed.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T06:03:19.274Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_02b2865f3333_329b2b",
+    "revisionDigest": "02b2865f33337e18a3b48faa",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e5216679c03d4062bc1d/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The no-plan conclusion itself is right: no opening has a price any buyer is shown paying (the only website price evidence is WebFX's $100-$5,000 generic range, which I verified fails scope), no close rate, no current buying signal and no confirmed fulfiller, and the decisive links named (OFFER_AND_PRICE, CONVERSION) are the ones the evidence decides; nothing is misstated as a constraint. But the resolution the owner would act on does not work as written: passing its test at its threshold does not carry the target. The threshold is 3 deposits from 350 contacts (0.86%), which needs ~1,500 contacts for 12 sales; at the stated 50 emails a day from the owner's own mailbox, 350 contacts take to day 7 and the remaining ~1,150 take another 23 days, i.e. the last contact goes out about day 30, leaving no time for the 5-day builds or for the 50% balances to be collected inside the 30-day window. So the test either needs a channel throughput that is evidenced to reach ~1,500 contacts by about day 15, or a pass threshold high enough that the measured rate reaches 12 sales from the contacts actually reachable in time (e.g. ~12 sales from ~700 contacts by day 15 = ~1.7%), or the resolution should say plainly that even passing it does not reach $12,000 in 30 days.",
+    "findings": [
+     "Throughput arithmetic: 12 sales / 0.86% = ~1,400-1,500 contacts; 50/day x 30 days = 1,500 contacts, finishing on day 30 - no time to build (5 days) and collect the balance.",
+     "'No warmup needed' for 50 cold emails a day from the owner's existing personal mailbox is not sourced; only the 2-week warmup for new inboxes is. The test's own channel capacity and deliverability is therefore an unknown, and the owner's hours to send and handle 50 personal emails a day are not stated (ownerHoursPerWeek is null).",
+     "Collected-cash ledger: with 50% deposits, the $12,000 needs all 12 balances collected by day 30, not just deposits; the proof should be stated in collected cash.",
+     "Capital: 12 builds x ~$250 = ~$3,000 exceeds the $2,500 cap unless each is paid from its own deposit; the resolution says so, which is correct, but the per-build order must wait for its deposit.",
+     "DataAnnotation exclusion basis: 'a wage, not a price a buyer pays' is not a valid exclusion (a payer paying for delivered work is still a buyer). The opening fails on its own record instead: 240-480 owner hours in 30 days against unstated owner hours, and work availability not guaranteed by the payer's FAQ. State that basis.",
+     "Freelancer.com alternative correctly not adopted: price and award rate unestablished, 17-490 competing bids."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:08:12.184Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_56c5b1b79fd1_2128a2",
+    "revisionDigest": "56c5b1b79fd1b350eb862746",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e5216679c03d4062bc1d/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN remains right (no price any buyer is shown paying, no close rate, no demand signal, no confirmed fulfiller; decisive links CONVERSION and OFFER_AND_PRICE; nothing called a constraint), and the recommended test now carries the target if it passes at its threshold. Recomputed: 5 deposits of 350 = 1.43%; 50/day to day 17 = 850 contacts; 1.43% x 850 = ~12 sales = $12,000; last contacts on day 17 leave ~1-3 days to pay a deposit, 5 days to build (~day 22-25) and balances collected by ~day 25-27 inside 30. Capital: each ~$250 build is ordered only after its own $500 deposit clears, so cash never goes negative and the $2,500 cap is never touched. Proof is in collected cash ($2,500 by day 8). Fulfilment is checked by written designer quotes before any order is taken. Mailbox deliverability is now an UNKNOWN measured in the test with a 3% bounce stop; owner hours stated (~1.5 h/day; no hours ceiling in the contract). DataAnnotation exclusion now rests on its own record (240-480 owner hours, availability not guaranteed).",
+    "findings": [
+     "Pass threshold sits right at the edge: 1.43% x 850 = 12.1 sales, so any shortfall in contacts sent (bounces, days missed) misses $12,000; the continue rule should re-check the cumulative rate on ~day 12.",
+     "Excluded DataAnnotation reason still adds 'Brain also classes it as owner wage'; the stated record-based reason is what carries the exclusion.",
+     "Ledger is empty by design (NO_PLAN); trace shows $0 spent and $2,500 untouched."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:12:11.696Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_56c5b1b79fd1_2128a2",
+   "digest": "56c5b1b79fd1b350eb862746",
+   "contractDigest": "c0eb31280aed10461360fec9",
+   "plan": {
+    "goalId": "wst_9691683062d64089b529",
+    "contractDigest": "c0eb31280aed10461360fec9",
+    "parentRevisionId": "rev_02b2865f3333_329b2b",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no discovered route is shown to turn $2,500 into $12,000 collected in 30 days",
+     "opportunityIds": [],
+     "why": "The strongest route (cold-emailed $1,000 websites for local businesses, built by a ~$250 Fiverr designer) needs 12 paid sales in 30 days, but no buyer is shown paying ~$1,000 for this offer (the only price evidence is an agency range of $100-$5,000) and no close rate is measured. Its Instantly channel cannot even start at volume in time: new inboxes need at least 2 weeks of warmup before campaigns. Freelancer.com requests clear at ~$140-$450 against 17-490 bids (35 wins needed), and DataAnnotation is a wage, not a sale."
+    },
+    "alternatives": [
+     {
+      "title": "Bid on Freelancer.com website requests, Fiverr designer fulfils",
+      "why": "Budgets ~INR 12,500-37,500 (~$140-$420) with 17-490 competing bids; 35 awards and milestone releases in 30 days is not established."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Excluded: 240-480 owner hours in 30 days from a payer that does not guarantee work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t0",
+      "kind": "TEST",
+      "label": "Before any offer: message 3 Fiverr WordPress designers for written quotes (price, 5-page scope, delivery days, capacity for 12 sites in 3 weeks); proceed only with one confirming <= $300 and <= 5 days",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_fiverr"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Experiment: owner sends ~50/day plain emails from his existing mailbox to 350 local service businesses with no website, offering a $1,000 5-page site, 50% deposit (days 1-7); bounces and spam placement are logged as the channel's own measurement",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "t0",
+      "evidence": [
+       "src_clutch",
+       "src_webfx"
+      ],
+      "ownerHours": 10.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OTHER",
+      "label": "Decide on day 8: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) from 350 contacts -> continue to ~500 more contacts by day 17 (850 total), order each build only after its own deposit, collect balances by day 25; fewer -> stop",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay for a cold-emailed local-business website",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "paid deposits at $1,000"
+     },
+     {
+      "name": "close rate from cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 5 paid of 350 contacts (1.4%), the rate at which the ~850 contacts reachable by day 17 yield 12 sales with time to build (5 days) and collect balances by day 25"
+     },
+     {
+      "name": "sales needed",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [],
+      "needs": "$12,000 / $1,000"
+     },
+     {
+      "name": "inbox warmup before campaigns",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "src_warmup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor price and capacity per site",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD and sites/week",
+      "sources": [
+       "src_fiverr"
+      ],
+      "needs": "written quote <= $300, <= 5 days, 12 sites in 3 weeks"
+     },
+     {
+      "name": "owner mailbox deliverability at 50/day",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "share delivered",
+      "sources": [],
+      "needs": "bounce < 3% and replies arriving during days 1-7"
+     },
+     {
+      "name": "contacts reachable by day 17",
+      "status": "ESTIMATE",
+      "value": 850,
+      "unit": "contacts",
+      "sources": [],
+      "needs": "50/day for 17 days"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+      "dated": "2026",
+      "claim": "Average cold-email reply rate 3.43% (replies, not sales)",
+      "population": "Instantly senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_warmup",
+      "url": "https://instantly.ai/blog/warm-up-email-domain/",
+      "dated": "2026-11-28",
+      "claim": "Plan at least 2 weeks of warmup for new inboxes; 4 weeks safer for brand-new domains",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07bc35bd97b442ec8620"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457, 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/web-development/business-website-development-40838854",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 17 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_310fc6f240614a69b6e8"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_31d50e0a64114a8bb5dd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer is shown paying ~$1,000 for a cold-emailed local-business website, and no close rate is measured; 12 such sales in 30 days (and a warmed cold-email channel, which itself needs 2+ weeks) is therefore not established.",
+     "resolution": "Day 0-1 ($0): get written quotes from 3 Fiverr WordPress designers (<= $300/site, <= 5 days, capacity for 12 sites in 3 weeks) - this measures FULFILMENT before any order is taken. Days 1-7 ($0, ~1.5 owner hours/day): from the owner's existing mailbox email 350 local service businesses without a website, $1,000 site, 50% deposit; log bounces and spam placement (its deliverability at 50/day is itself unmeasured). Proof, in collected cash: a confirmed designer and >= 5 paid $500 deposits ($2,500 collected) by day 8 = 1.4%, the rate at which the ~850 contacts reachable at 50/day by day 17 give 12 sales, leaving 5 days to build and balances collected by ~day 25. Continue: email ~500 more by day 17; order each build only after its own deposit has cleared (so 12 x ~$250 never exceeds the $2,500 cap at once). Stop: no designer confirms, fewer than 5 deposits by day 8, bounce rate over 3%, or replies rejecting the price. Even a 0.86% rate (3 of 350) would not reach $12,000 inside 30 days.",
+     "decisiveLinks": [
+      "CONVERSION",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Throughput arithmetic: 0.86% needs ~1,500 contacts, finishing day 30",
+      "resolution": "Accepted. Pass threshold raised to >= 5 deposits of 350 (1.4%), so 12 sales come from the ~850 contacts reachable by day 17, builds finish by ~day 22 and balances are collected by ~day 25; the resolution now says a 0.86% rate would not reach the target."
+     },
+     {
+      "finding": "'No warmup needed' for the owner's mailbox is unsourced; owner hours not stated",
+      "resolution": "Accepted. Claim removed; mailbox deliverability at 50/day is now an UNKNOWN quantity measured in the test (bounce/spam log, stop at >3% bounces), and owner hours are stated (~1.5 h/day, 10.5 h for the test)."
+     },
+     {
+      "finding": "Proof should be stated in collected cash",
+      "resolution": "Accepted. Proof is now >= $2,500 collected (5 paid $500 deposits) by day 8, and continuation requires all 12 balances collected by ~day 25."
+     },
+     {
+      "finding": "Capital: 12 builds x $250 exceeds the cap unless each waits for its deposit",
+      "resolution": "Accepted; the resolution states each build is ordered only after its own deposit has cleared."
+     },
+     {
+      "finding": "DataAnnotation exclusion basis",
+      "resolution": "Accepted. Exclusion now rests on its own record: 240-480 owner hours in 30 days and work availability not guaranteed by the payer's FAQ."
+     },
+     {
+      "finding": "Freelancer.com alternative correctly not adopted",
+      "resolution": "Agreed; unchanged."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "why": "Fails on its own record: $12,000 at the published $25-$50/h needs 240-480 owner hours in 30 days, and the payer's FAQ says work availability depends on demand and performance, so the volume is not available to plan on (Brain also classes it as owner wage rather than a sale)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_07bc35bd97b442ec8620",
+      "deals": 12,
+      "price": 1000,
+      "directCost": 250,
+      "capital": 400,
+      "settlesDay": null,
+      "ownerHours": 6
+     },
+     {
+      "opportunityId": "cop_310fc6f240614a69b6e8",
+      "deals": 35,
+      "price": 350,
+      "directCost": 150,
+      "capital": 50,
+      "settlesDay": null,
+      "ownerHours": 35
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_31d50e0a64114a8bb5dd",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_56c5b1b79fd1_2128a2",
+    "digest": "56c5b1b79fd1b350eb862746",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:10:40.733Z"
+   },
+   "review": {
+    "revisionId": "rev_56c5b1b79fd1_2128a2",
+    "revisionDigest": "56c5b1b79fd1b350eb862746",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7148cb397a814890a585/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e5216679c03d4062bc1d/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN remains right (no price any buyer is shown paying, no close rate, no demand signal, no confirmed fulfiller; decisive links CONVERSION and OFFER_AND_PRICE; nothing called a constraint), and the recommended test now carries the target if it passes at its threshold. Recomputed: 5 deposits of 350 = 1.43%; 50/day to day 17 = 850 contacts; 1.43% x 850 = ~12 sales = $12,000; last contacts on day 17 leave ~1-3 days to pay a deposit, 5 days to build (~day 22-25) and balances collected by ~day 25-27 inside 30. Capital: each ~$250 build is ordered only after its own $500 deposit clears, so cash never goes negative and the $2,500 cap is never touched. Proof is in collected cash ($2,500 by day 8). Fulfilment is checked by written designer quotes before any order is taken. Mailbox deliverability is now an UNKNOWN measured in the test with a 3% bounce stop; owner hours stated (~1.5 h/day; no hours ceiling in the contract). DataAnnotation exclusion now rests on its own record (240-480 owner hours, availability not guaranteed).",
+    "findings": [
+     "Pass threshold sits right at the edge: 1.43% x 850 = 12.1 sales, so any shortfall in contacts sent (bounces, days missed) misses $12,000; the continue rule should re-check the cumulative rate on ~day 12.",
+     "Excluded DataAnnotation reason still adds 'Brain also classes it as owner wage'; the stated record-based reason is what carries the exclusion.",
+     "Ledger is empty by design (NO_PLAN); trace shows $0 spent and $2,500 untouched."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:12:11.696Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Turn $2,500 into at least $12,000 of collected cash within 30 days. Any industry is fine.",
+    "terms": "67d93cd412ea6b26",
+    "openings": {
+     "cop_07bc35bd97b442ec8620": "edc507030351b45a",
+     "cop_310fc6f240614a69b6e8": "bc831c89eeddc07a",
+     "cop_31d50e0a64114a8bb5dd": "752a648e440c31dd"
+    }
+   },
+   "at": "2026-11-28T06:15:21.403Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

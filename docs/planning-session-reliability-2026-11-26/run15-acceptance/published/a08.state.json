@@ -1,0 +1,714 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_eaa19506e1d746f69801",
+   "words": "Collect $3,000 of settled cash within 35 days with no more than 4 hours a week of owner time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 35,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "Settled cash of $3,000 received within 35 days, using at most 4 owner hours a week",
+    "ownerHoursPerWeek": 4,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f04cdadd0d691734176c709e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_eaa19506e1d746f69801",
+    "contractDigest": "f04cdadd0d691734176c709e",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening needs 48 owner hours of on-site teaching against a 20-hour allowance",
+     "opportunityIds": [],
+     "why": "The only held opening is the owner teaching eight-session lunchtime yoga programmes herself: $960 per programme (four signed), 12 owner hours each with no substitute instructor. $3,000 needs four programmes = 48 owner hours, against 4 h/week x 5 weeks = 20 owner hours; inside 20 hours only one programme ($960) fits. It is also the owner's own on-site physical work. No other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Run all four signed yoga programmes",
+      "why": "Rejected: 48 owner hours against a 20-hour window allowance, and the owner teaches on site personally."
+     },
+     {
+      "title": "Run one programme inside the hours",
+      "why": "Rejected: 12 owner hours fit, but $960 is far short of the $3,000 target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain searches for openings whose delivery Brain or a named provider performs (no owner teaching), with reachable buyers, an evidenced price and settlement inside 35 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_hours"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "owner hours per programme",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "hours",
+      "sources": [
+       "s_hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per programme",
+      "status": "EVIDENCED",
+      "value": 96000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "programmes needed for target",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "programmes",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_hours",
+      "url": "https://brain.local/card/cop_e18c9615ba554303b87b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "The owner teaches every session herself; a programme is 12 owner hours; no substitute instructor is engaged",
+      "population": "HR and wellness coordinators at local employers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e18c9615ba554303b87b"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_e18c9615ba554303b87b#price",
+      "dated": "2026-11",
+      "claim": "Four employers signed eight-session programme agreements at $960 each",
+      "population": "HR and wellness coordinators at local employers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e18c9615ba554303b87b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the only opening is fulfilled by the owner personally at 12 hours per $960 programme, so the $3,000 target needs 48 owner hours against the 20 the objective allows (and it is the owner's on-site physical work). No opening fulfilled by Brain or a provider is held.",
+     "resolution": "Either allow at least 48 owner hours in the window (about 10 h/week) and confirm the owner will teach on site, or have Brain find an opening fulfilled without the owner (e.g. a substitute instructor the employers accept, or a Brain-produced deliverable) with an evidenced price and settlement inside 35 days, then re-plan.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [],
+    "excluded": [
+     {
+      "opportunityId": "cop_e18c9615ba554303b87b",
+      "why": "Owner teaches every session personally on site (physical work), 12 owner hours per programme; four programmes for $3,000 need 48 owner hours against 20 allowed."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner allowance from 4 h/week (20 h) to at least 48 hours in the 35-day window (~10 h/week) for four programmes; or lower the target to $960 (one programme in 12 hours)",
+      "basis": [
+       {
+        "opportunityId": "cop_e18c9615ba554303b87b",
+        "field": "captureMechanism"
+       },
+       {
+        "opportunityId": "cop_e18c9615ba554303b87b",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_9fa932a8adf3_1dceac",
+    "digest": "9fa932a8adf3df6c412dd17a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_120b59d0fdc840cc8ed3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:38.685Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_eaa19506e1d746f69801",
+   "contractDigest": "f04cdadd0d691734176c709e",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening needs 48 owner hours of on-site teaching against a 20-hour allowance",
+    "opportunityIds": [],
+    "why": "The only held opening is the owner teaching eight-session lunchtime yoga programmes herself: $960 per programme (four signed), 12 owner hours each with no substitute instructor. $3,000 needs four programmes = 48 owner hours, against 4 h/week x 5 weeks = 20 owner hours; inside 20 hours only one programme ($960) fits. It is also the owner's own on-site physical work. No other opening is held."
+   },
+   "alternatives": [
+    {
+     "title": "Run all four signed yoga programmes",
+     "why": "Rejected: 48 owner hours against a 20-hour window allowance, and the owner teaches on site personally."
+    },
+    {
+     "title": "Run one programme inside the hours",
+     "why": "Rejected: 12 owner hours fit, but $960 is far short of the $3,000 target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Brain searches for openings whose delivery Brain or a named provider performs (no owner teaching), with reachable buyers, an evidenced price and settlement inside 35 days",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_hours"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "owner hours per programme",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "hours",
+     "sources": [
+      "s_hours"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per programme",
+     "status": "EVIDENCED",
+     "value": 96000,
+     "unit": "cents",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "programmes needed for target",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "programmes",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_hours",
+     "url": "https://brain.local/card/cop_e18c9615ba554303b87b#captureMechanism",
+     "dated": "2026-11",
+     "claim": "The owner teaches every session herself; a programme is 12 owner hours; no substitute instructor is engaged",
+     "population": "HR and wellness coordinators at local employers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e18c9615ba554303b87b"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_e18c9615ba554303b87b#price",
+     "dated": "2026-11",
+     "claim": "Four employers signed eight-session programme agreements at $960 each",
+     "population": "HR and wellness coordinators at local employers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e18c9615ba554303b87b"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: the only opening is fulfilled by the owner personally at 12 hours per $960 programme, so the $3,000 target needs 48 owner hours against the 20 the objective allows (and it is the owner's on-site physical work). No opening fulfilled by Brain or a provider is held.",
+    "resolution": "Either allow at least 48 owner hours in the window (about 10 h/week) and confirm the owner will teach on site, or have Brain find an opening fulfilled without the owner (e.g. a substitute instructor the employers accept, or a Brain-produced deliverable) with an evidenced price and settlement inside 35 days, then re-plan.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [],
+   "excluded": [
+    {
+     "opportunityId": "cop_e18c9615ba554303b87b",
+     "why": "Owner teaches every session personally on site (physical work), 12 owner hours per programme; four programmes for $3,000 need 48 owner hours against 20 allowed."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Raise the owner allowance from 4 h/week (20 h) to at least 48 hours in the 35-day window (~10 h/week) for four programmes; or lower the target to $960 (one programme in 12 hours)",
+     "basis": [
+      {
+       "opportunityId": "cop_e18c9615ba554303b87b",
+       "field": "captureMechanism"
+      },
+      {
+       "opportunityId": "cop_e18c9615ba554303b87b",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_9fa932a8adf3_1dceac",
+   "digest": "9fa932a8adf3df6c412dd17a",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_120b59d0fdc840cc8ed3/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:58:38.685Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_9fa932a8adf3_1dceac",
+   "digest": "9fa932a8adf3df6c412dd17a",
+   "contractDigest": "f04cdadd0d691734176c709e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "No found opening is far enough along to model; 7 constructed estimate(s) were modelled: the best combination (1 of them) reaches the target in 69.7% of worlds, which is coverage of assumed inputs, not a probability, and settles a median USD 5,586 against the USD 3,000 target. The reconstruction is hypothetical: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5277× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: HR and wellness coordinators at local employers\" needs [figure withheld] and keeps [figure withheld], 958× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted.",
+    "acceptance": "NO_CANDIDATE",
+    "considered": [],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach HR and wellness coordinators at local employers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with HR and wellness coordinators at local employers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Find an independent provider who performs \"Eight-session lunchtime yoga programmes taught on site by the owner\" for its buyers, at a quoted cost a deal: the card names the owner doing physical work, which the owner does not do.",
+    "openings": [],
+    "excluded": [
+     {
+      "opportunityId": "cop_e18c9615ba554303b87b",
+      "title": "Eight-session lunchtime yoga programmes taught on site by the owner",
+      "reason": "needs the owner's physical work: the service (\"on site\") would be performed by The owner, personally; the owner does no physical work",
+      "card": {
+       "payer": "HR and wellness coordinators at local employers",
+       "reachableChannel": "The four coordinators who signed programme agreements",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:34.733Z",
+       "offerScope": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+       "priceCents": 96000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 12,
+       "requiredCapabilities": [],
+       "industry": "yoga studios",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 96000,
+        "currency": "USD",
+        "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 96000,
+        "currency": "USD",
+        "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 96000,
+        "currency": "USD",
+        "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 96000,
+        "currency": "USD",
+        "deliverable": "The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The owner teaches every session herself, twice a week starting day 2; each session takes 1.5 hours including travel, so a programme is 12 owner hours. No substitute instructor is engaged. Each employer pays 7 days after its last session. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "HR and wellness coordinators at local employers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four employers signed eight-session programme agreements at $960 each (signed agreements, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "33 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 35,
+     "hoursCeiling": 20,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 4
+    },
+    "at": "2026-11-28T05:56:16.078Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_9fa932a8adf3_1dceac",
+    "revisionDigest": "9fa932a8adf3df6c412dd17a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_120b59d0fdc840cc8ed3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1725b6e35f314ca0a0ca/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right, and the gap it names is a true constraint rather than missing evidence: even with every fact established, the only held opening cannot fit the owner-hours limit. Each programme is 12 owner hours (eight 1.5 h sessions taught by the owner, no substitute engaged) at $960; three programmes give $2,880 < $3,000, so four are needed = 48 h against 4 h/week x 5 weeks = 20 h. Per week it is worse: each programme runs twice weekly (3 h/week), so four in parallel need ~12 h/week against 4. The OWNER_HOURS constraint is cited to the card's captureMechanism and price, and no unknown is treated as known.",
+    "findings": [
+     "Recomputed: ceil(3000/960) = 4 programmes; 4 x $960 = $3,840; 4 x 12 h = 48 h > 20 h; one programme (3 h/week, $960, paid ~7 days after its last session ~day 30) is the most that fits.",
+     "Constraint OWNER_HOURS with basis captureMechanism + price is correct; decisiveLinks is empty, which is consistent with a limit-driven no-plan (no chain link is unestablished on the evidence).",
+     "Brain's exclusion also cites 'the owner does no physical work', while the contract records ownerPhysicalWork as UNSTATED; the hours constraint alone decides, so this does not change the verdict.",
+     "Brain's 69.7% figure comes from constructed estimates (coverage of assumed inputs, flagged implausible), not held openings; the revision correctly does not adopt it and directs research to openings fulfilled without the owner."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:02:06.284Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_9fa932a8adf3_1dceac",
+   "digest": "9fa932a8adf3df6c412dd17a",
+   "contractDigest": "f04cdadd0d691734176c709e",
+   "plan": {
+    "goalId": "wst_eaa19506e1d746f69801",
+    "contractDigest": "f04cdadd0d691734176c709e",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening needs 48 owner hours of on-site teaching against a 20-hour allowance",
+     "opportunityIds": [],
+     "why": "The only held opening is the owner teaching eight-session lunchtime yoga programmes herself: $960 per programme (four signed), 12 owner hours each with no substitute instructor. $3,000 needs four programmes = 48 owner hours, against 4 h/week x 5 weeks = 20 owner hours; inside 20 hours only one programme ($960) fits. It is also the owner's own on-site physical work. No other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Run all four signed yoga programmes",
+      "why": "Rejected: 48 owner hours against a 20-hour window allowance, and the owner teaches on site personally."
+     },
+     {
+      "title": "Run one programme inside the hours",
+      "why": "Rejected: 12 owner hours fit, but $960 is far short of the $3,000 target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain searches for openings whose delivery Brain or a named provider performs (no owner teaching), with reachable buyers, an evidenced price and settlement inside 35 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_hours"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "owner hours per programme",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "hours",
+      "sources": [
+       "s_hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per programme",
+      "status": "EVIDENCED",
+      "value": 96000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "programmes needed for target",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "programmes",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_hours",
+      "url": "https://brain.local/card/cop_e18c9615ba554303b87b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "The owner teaches every session herself; a programme is 12 owner hours; no substitute instructor is engaged",
+      "population": "HR and wellness coordinators at local employers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e18c9615ba554303b87b"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_e18c9615ba554303b87b#price",
+      "dated": "2026-11",
+      "claim": "Four employers signed eight-session programme agreements at $960 each",
+      "population": "HR and wellness coordinators at local employers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e18c9615ba554303b87b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the only opening is fulfilled by the owner personally at 12 hours per $960 programme, so the $3,000 target needs 48 owner hours against the 20 the objective allows (and it is the owner's on-site physical work). No opening fulfilled by Brain or a provider is held.",
+     "resolution": "Either allow at least 48 owner hours in the window (about 10 h/week) and confirm the owner will teach on site, or have Brain find an opening fulfilled without the owner (e.g. a substitute instructor the employers accept, or a Brain-produced deliverable) with an evidenced price and settlement inside 35 days, then re-plan.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [],
+    "excluded": [
+     {
+      "opportunityId": "cop_e18c9615ba554303b87b",
+      "why": "Owner teaches every session personally on site (physical work), 12 owner hours per programme; four programmes for $3,000 need 48 owner hours against 20 allowed."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner allowance from 4 h/week (20 h) to at least 48 hours in the 35-day window (~10 h/week) for four programmes; or lower the target to $960 (one programme in 12 hours)",
+      "basis": [
+       {
+        "opportunityId": "cop_e18c9615ba554303b87b",
+        "field": "captureMechanism"
+       },
+       {
+        "opportunityId": "cop_e18c9615ba554303b87b",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_9fa932a8adf3_1dceac",
+    "digest": "9fa932a8adf3df6c412dd17a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_120b59d0fdc840cc8ed3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:38.685Z"
+   },
+   "review": {
+    "revisionId": "rev_9fa932a8adf3_1dceac",
+    "revisionDigest": "9fa932a8adf3df6c412dd17a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_120b59d0fdc840cc8ed3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1725b6e35f314ca0a0ca/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right, and the gap it names is a true constraint rather than missing evidence: even with every fact established, the only held opening cannot fit the owner-hours limit. Each programme is 12 owner hours (eight 1.5 h sessions taught by the owner, no substitute engaged) at $960; three programmes give $2,880 < $3,000, so four are needed = 48 h against 4 h/week x 5 weeks = 20 h. Per week it is worse: each programme runs twice weekly (3 h/week), so four in parallel need ~12 h/week against 4. The OWNER_HOURS constraint is cited to the card's captureMechanism and price, and no unknown is treated as known.",
+    "findings": [
+     "Recomputed: ceil(3000/960) = 4 programmes; 4 x $960 = $3,840; 4 x 12 h = 48 h > 20 h; one programme (3 h/week, $960, paid ~7 days after its last session ~day 30) is the most that fits.",
+     "Constraint OWNER_HOURS with basis captureMechanism + price is correct; decisiveLinks is empty, which is consistent with a limit-driven no-plan (no chain link is unestablished on the evidence).",
+     "Brain's exclusion also cites 'the owner does no physical work', while the contract records ownerPhysicalWork as UNSTATED; the hours constraint alone decides, so this does not change the verdict.",
+     "Brain's 69.7% figure comes from constructed estimates (coverage of assumed inputs, flagged implausible), not held openings; the revision correctly does not adopt it and directs research to openings fulfilled without the owner."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:02:06.284Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 35 days with no more than 4 hours a week of owner time.",
+    "terms": "2b03effc7d2d0a7b",
+    "openings": {
+     "cop_e18c9615ba554303b87b": "a59fc7bf7c122f17"
+    }
+   },
+   "at": "2026-11-28T06:04:32.164Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

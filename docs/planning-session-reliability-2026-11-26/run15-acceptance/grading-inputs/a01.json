@@ -1,0 +1,349 @@
+{
+ "caseId": "av-01-winery-dtc-reports-executable",
+ "keys": {
+  "cop_52cc540b8d5040aaaa5b": "dtcWorkbook",
+  "cop_b47e08b8b926487fb9d7": "harvestCrew"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 25488× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Direct-to-consumer shipping-report workbook for small wineri\" needs [figure withheld] and keeps [figure withheld], 236× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Tasting-room and DTC managers at small wineries\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_52cc540b8d5040aaaa5b",
+   "cop_b47e08b8b926487fb9d7"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Direct-to-consumer shipping-report workbook for small wineries\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Direct-to-consumer shipping-report workbook for small wineries\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Sell \"Harvest-crew labour placement for vineyards\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Harvest-crew labour placement for vineyards\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Tasting-room and DTC managers at small wineries",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Tasting-room and DTC managers at small wineries",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 7.980920246443498
+   },
+   {
+    "label": "Collect payment for \"Direct-to-consumer shipping-report workbook for small wineries\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Collect payment for \"Harvest-crew labour placement for vineyards\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_52cc540b8d5040aaaa5b",
+    "title": "Direct-to-consumer shipping-report workbook for small wineries",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Tasting-room and DTC managers at small wineries",
+     "reachableChannel": "Email to the contacts in the state winegrowers association's public member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-22T05:51:54.250Z",
+     "offerScope": "A workbook that turns a winery's order export into its monthly per-state direct-shipping reports; Brain builds each from the winery's export within one day of the order. Paid by card at order; the processor pays out 5 days later.",
+     "priceCents": 24000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "wineries",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the contacts in the state winegrowers association's public member direc"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-22"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "12 deal(s) needed, 410 available in the window (410 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "410 wineries holding a direct-shipper permit are listed with contact emails in the state winegrowers association's public member directory; each files shipping reports monthly.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook that turns a winery's order export into its monthly per-state direct-shipping reports; Brain builds each from the winery's export within one day of the order. Paid by card at order; the processor pays out 5 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "18 paid orders from 150 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Tasting-room and DTC managers at small wineries",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two DTC-compliance template sellers list a per-winery state shipping-report workbook at $240 (listing pages, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_b47e08b8b926487fb9d7",
+    "title": "Harvest-crew labour placement for vineyards",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Vineyard managers",
+     "reachableChannel": "Phone calls to vineyard managers in the county",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:51:54.250Z",
+     "offerScope": "Harvest-crew labour placement for vineyards",
+     "priceCents": 2200,
+     "currency": "USD",
+     "fulfillmentOwner": "Valley Farm Labor Contractors (licensed crew leader)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "wineries",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Phone calls to vineyard managers in the county"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 10 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "61 deal(s) needed but only 60 in the window (60 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Valley Farm Labor Contractors (licensed crew leader) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "60 vineyards in the county hire harvest crews each autumn.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Harvest-crew labour placement for vineyards to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "10 paid orders from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Valley Farm Labor Contractors (licensed crew leader) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Vineyard managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Vineyard harvest workers in the county are paid a $22 hourly wage (state agricultural wage survey, 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:57:10.590Z"
+ }
+}

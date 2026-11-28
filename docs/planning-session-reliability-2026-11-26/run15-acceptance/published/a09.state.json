@@ -1,0 +1,1821 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_0524feef49544ebd8493",
+   "words": "Keep $3,500 of net settled cash after direct costs within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 350000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,500 of net settled cash after direct costs received within 30 days with no owner capital advanced",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f1c7857a222afc0f60ace512"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_0524feef49544ebd8493",
+    "contractDigest": "f1c7857a222afc0f60ace512",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed propane-dealer leak-check batches through Keystone",
+     "opportunityIds": [
+      "cop_29ad1c33af13485a947c"
+     ],
+     "why": "Three dealers signed written work orders at $2,700 a batch ($8,100). Keystone's quote is $1,425 a batch ($4,275), paid out of each dealer's payment, so no capital is advanced. Net contribution $3,825 >= $3,500; the last dealer pays on day 16 and Keystone is paid by day 18, inside 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Restock 20-lb cylinder exchange cages",
+      "why": "Rejected: each cylinder costs $23 from Tri-State against a $22 price, so every deal loses money, and 140 stores x 4 restocks cannot reach the target anyway."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the three signed work orders ($2,700 per 15-tank batch) and schedule the batches with each service manager",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_agree"
+      ],
+      "priceCents": 270000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Keystone for 45 tank checks starting day 2 (10 tanks a day), paid from each dealer's payment within 2 days",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_ful"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 1's 15 tanks (batch complete day 3)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 3,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Collect dealer 1's $2,700 (due 10 days after batch completion, day 13) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 2's 15 tanks (batch complete day 4)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 4,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Collect dealer 2's $2,700 (due 10 days after batch completion, day 14) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver3",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 3's 15 tanks (batch complete day 6)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 6,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect3",
+      "kind": "COLLECT",
+      "label": "Collect dealer 3's $2,700 (due 10 days after batch completion, day 16) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 16,
+      "dependsOn": "deliver3",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 1 pays for its batch",
+      "settlesDay": 13,
+      "stepId": "collect1"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 1's batch from the receipt",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 2 pays for its batch",
+      "settlesDay": 14,
+      "stepId": "collect2"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 2's batch from the receipt",
+      "stepId": "deliver2"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 3 pays for its batch",
+      "settlesDay": 16,
+      "stepId": "collect3"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 3's batch from the receipt",
+      "stepId": "deliver3"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "signed batches",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "batches",
+      "sources": [
+       "s_price",
+       "s_agree"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per batch",
+      "status": "EVIDENCED",
+      "value": 270000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Keystone cost per batch",
+      "status": "EVIDENCED",
+      "value": 142500,
+      "unit": "cents",
+      "sources": [
+       "s_cost",
+       "s_ful"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net contribution",
+      "status": "EVIDENCED",
+      "value": 382500,
+      "unit": "cents",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to last usable cash",
+      "status": "EVIDENCED",
+      "value": 16,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Keystone capacity",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "tanks per day",
+      "sources": [
+       "s_ful"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#price",
+      "dated": "2026-11",
+      "claim": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks",
+      "population": "three independent propane dealers' service managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#agreements",
+      "dated": "2026-11",
+      "claim": "Three WRITTEN_ACCEPTANCE agreements, AGREED, $2,700 each",
+      "population": "the three signing dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $1,425 per batch (Keystone $95 a tank)",
+      "population": "Keystone Gas Services LLC quote",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#fulfillment",
+      "dated": "2026-11",
+      "claim": "Keystone Gas Services LLC, licensed propane technicians, tests 10 tanks a day from day 2, paid from each dealer's payment within 2 days of receipt",
+      "population": "Keystone Gas Services LLC",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "16 days to usable cash; each dealer pays 10 days after its batch is completed",
+      "population": "the three signing dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#exposure",
+      "dated": "2026-11",
+      "claim": "Exposure $0: supplier paid out of the dealer's payment",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_xprice",
+      "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#price",
+      "dated": "2026-11",
+      "claim": "Stores pay $22 per filled cylinder",
+      "population": "county convenience stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e39b282ab6204a519a6d"
+     },
+     {
+      "id": "s_xcost",
+      "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#directCosts",
+      "dated": "2026-11",
+      "claim": "Tri-State charges $23 per filled cylinder delivered",
+      "population": "Tri-State Cylinder Filling",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e39b282ab6204a519a6d"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_29ad1c33af13485a947c",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_e39b282ab6204a519a6d",
+      "missing": [
+       "MARKET_VOLUME",
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e39b282ab6204a519a6d",
+      "why": "Loses money on every deal: $23 direct cost per cylinder against a $22 price (card directCosts and price)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_29ad1c33af13485a947c",
+      "deals": 3,
+      "price": 2700,
+      "directCost": 1425,
+      "capital": 0,
+      "settlesDay": 16,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_66fc3824f888_622d26",
+    "digest": "66fc3824f888b2042ee82459",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c3318c7db37f4b50be19/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:45.514Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_0524feef49544ebd8493",
+   "contractDigest": "f1c7857a222afc0f60ace512",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the three signed propane-dealer leak-check batches through Keystone",
+    "opportunityIds": [
+     "cop_29ad1c33af13485a947c"
+    ],
+    "why": "Three dealers signed written work orders at $2,700 a batch ($8,100). Keystone's quote is $1,425 a batch ($4,275), paid out of each dealer's payment, so no capital is advanced. Net contribution $3,825 >= $3,500; the last dealer pays on day 16 and Keystone is paid by day 18, inside 30 days."
+   },
+   "alternatives": [
+    {
+     "title": "Restock 20-lb cylinder exchange cages",
+     "why": "Rejected: each cylinder costs $23 from Tri-State against a $22 price, so every deal loses money, and 140 stores x 4 restocks cannot reach the target anyway."
+    }
+   ],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm the three signed work orders ($2,700 per 15-tank batch) and schedule the batches with each service manager",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_price",
+      "s_agree"
+     ],
+     "priceCents": 270000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "order",
+     "kind": "ORDER",
+     "label": "Book Keystone for 45 tank checks starting day 2 (10 tanks a day), paid from each dealer's payment within 2 days",
+     "performer": "Keystone Gas Services LLC",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_ful"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Keystone Gas Services LLC",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver1",
+     "kind": "DELIVER",
+     "label": "Keystone performs leak and pressure checks on dealer 1's 15 tanks (batch complete day 3)",
+     "performer": "Keystone Gas Services LLC",
+     "costCents": 142500,
+     "day": 3,
+     "dependsOn": "order",
+     "evidence": [
+      "s_ful",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Keystone Gas Services LLC",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect1",
+     "kind": "COLLECT",
+     "label": "Collect dealer 1's $2,700 (due 10 days after batch completion, day 13) and pay Keystone $1,425 from it",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 13,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "s_ttc",
+      "s_agree"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver2",
+     "kind": "DELIVER",
+     "label": "Keystone performs leak and pressure checks on dealer 2's 15 tanks (batch complete day 4)",
+     "performer": "Keystone Gas Services LLC",
+     "costCents": 142500,
+     "day": 4,
+     "dependsOn": "order",
+     "evidence": [
+      "s_ful",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Keystone Gas Services LLC",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect2",
+     "kind": "COLLECT",
+     "label": "Collect dealer 2's $2,700 (due 10 days after batch completion, day 14) and pay Keystone $1,425 from it",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "deliver2",
+     "evidence": [
+      "s_ttc",
+      "s_agree"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver3",
+     "kind": "DELIVER",
+     "label": "Keystone performs leak and pressure checks on dealer 3's 15 tanks (batch complete day 6)",
+     "performer": "Keystone Gas Services LLC",
+     "costCents": 142500,
+     "day": 6,
+     "dependsOn": "order",
+     "evidence": [
+      "s_ful",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Keystone Gas Services LLC",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect3",
+     "kind": "COLLECT",
+     "label": "Collect dealer 3's $2,700 (due 10 days after batch completion, day 16) and pay Keystone $1,425 from it",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 16,
+     "dependsOn": "deliver3",
+     "evidence": [
+      "s_ttc",
+      "s_agree"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 270000,
+     "label": "Dealer 1 pays for its batch",
+     "settlesDay": 13,
+     "stepId": "collect1"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 142500,
+     "label": "Pay Keystone for dealer 1's batch from the receipt",
+     "stepId": "deliver1"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 270000,
+     "label": "Dealer 2 pays for its batch",
+     "settlesDay": 14,
+     "stepId": "collect2"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 142500,
+     "label": "Pay Keystone for dealer 2's batch from the receipt",
+     "stepId": "deliver2"
+    },
+    {
+     "day": 16,
+     "kind": "RECEIPT",
+     "amountCents": 270000,
+     "label": "Dealer 3 pays for its batch",
+     "settlesDay": 16,
+     "stepId": "collect3"
+    },
+    {
+     "day": 18,
+     "kind": "SPEND",
+     "amountCents": 142500,
+     "label": "Pay Keystone for dealer 3's batch from the receipt",
+     "stepId": "deliver3"
+    }
+   ],
+   "proofDay": 16,
+   "quantities": [
+    {
+     "name": "signed batches",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "batches",
+     "sources": [
+      "s_price",
+      "s_agree"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per batch",
+     "status": "EVIDENCED",
+     "value": 270000,
+     "unit": "cents",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Keystone cost per batch",
+     "status": "EVIDENCED",
+     "value": 142500,
+     "unit": "cents",
+     "sources": [
+      "s_cost",
+      "s_ful"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net contribution",
+     "status": "EVIDENCED",
+     "value": 382500,
+     "unit": "cents",
+     "sources": [
+      "s_price",
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to last usable cash",
+     "status": "EVIDENCED",
+     "value": 16,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Keystone capacity",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "tanks per day",
+     "sources": [
+      "s_ful"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#price",
+     "dated": "2026-11",
+     "claim": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks",
+     "population": "three independent propane dealers' service managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_agree",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#agreements",
+     "dated": "2026-11",
+     "claim": "Three WRITTEN_ACCEPTANCE agreements, AGREED, $2,700 each",
+     "population": "the three signing dealers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $1,425 per batch (Keystone $95 a tank)",
+     "population": "Keystone Gas Services LLC quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_ful",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#fulfillment",
+     "dated": "2026-11",
+     "claim": "Keystone Gas Services LLC, licensed propane technicians, tests 10 tanks a day from day 2, paid from each dealer's payment within 2 days of receipt",
+     "population": "Keystone Gas Services LLC",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "16 days to usable cash; each dealer pays 10 days after its batch is completed",
+     "population": "the three signing dealers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_exp",
+     "url": "https://brain.local/card/cop_29ad1c33af13485a947c#exposure",
+     "dated": "2026-11",
+     "claim": "Exposure $0: supplier paid out of the dealer's payment",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_29ad1c33af13485a947c"
+    },
+    {
+     "id": "s_xprice",
+     "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#price",
+     "dated": "2026-11",
+     "claim": "Stores pay $22 per filled cylinder",
+     "population": "county convenience stores",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e39b282ab6204a519a6d"
+    },
+    {
+     "id": "s_xcost",
+     "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#directCosts",
+     "dated": "2026-11",
+     "claim": "Tri-State charges $23 per filled cylinder delivered",
+     "population": "Tri-State Cylinder Filling",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e39b282ab6204a519a6d"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_29ad1c33af13485a947c",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_e39b282ab6204a519a6d",
+     "missing": [
+      "MARKET_VOLUME",
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_e39b282ab6204a519a6d",
+     "why": "Loses money on every deal: $23 direct cost per cylinder against a $22 price (card directCosts and price)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_29ad1c33af13485a947c",
+     "deals": 3,
+     "price": 2700,
+     "directCost": 1425,
+     "capital": 0,
+     "settlesDay": 16,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_66fc3824f888_622d26",
+   "digest": "66fc3824f888b2042ee82459",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_c3318c7db37f4b50be19/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:57:45.514Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_66fc3824f888_622d26",
+   "digest": "66fc3824f888b2042ee82459",
+   "contractDigest": "f1c7857a222afc0f60ace512",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 427500,
+    "committedOpenCents": 0,
+    "preProofCents": 285000,
+    "maxExposureCents": 0,
+    "minCashCents": 270000,
+    "minCashDay": 13,
+    "collectedCents": 810000,
+    "collectedInWindowCents": 810000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 382500
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Subcontracted customer-tank leak checks for propane dealers,\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Subcontracted customer-tank leak checks for propane dealers,\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3825× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted customer-tank leak checks for propane dealers, in batche\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_29ad1c33af13485a947c",
+     "cop_e39b282ab6204a519a6d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+      "owner": "PERSON",
+      "cost": 1425
+     },
+     {
+      "label": "Collect payment for \"Subcontracted customer-tank leak checks for propane dealers, in batches of 15\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_29ad1c33af13485a947c",
+      "title": "Subcontracted customer-tank leak checks for propane dealers, in batches of 15",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3500,
+      "potentialReach": 3500,
+      "card": {
+       "payer": "Service managers at independent propane dealers",
+       "reachableChannel": "The three service managers who signed work orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:40.383Z",
+       "offerScope": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+       "priceCents": 270000,
+       "currency": "USD",
+       "fulfillmentOwner": "Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane technicians; can test 10 tanks a day from day 2; paid from each dealer's payment within 2 days of receipt)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "propane distribution",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 270000,
+        "currency": "USD",
+        "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 270000,
+        "currency": "USD",
+        "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 270000,
+        "currency": "USD",
+        "deliverable": "Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three service managers who signed work orders"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 8100 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 8100 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane t (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 1425, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "16 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Leak and pressure checks on 15 customer tanks per batch by licensed technicians. Each dealer pays 10 days after its batch is completed. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1425",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane technicians; can test 10 tanks a day from day 2; paid from each dealer's payment within 2 days of receipt) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Service managers at independent propane dealers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks, $180 a tank (signed work orders, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "16 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_e39b282ab6204a519a6d",
+      "title": "Restocking 20-lb cylinder exchange cages at convenience stores",
+      "missing": [
+       "MARKET_VOLUME",
+       "ECONOMICS"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Convenience-store managers hosting exchange cages",
+       "reachableChannel": "Visits to stores in the county",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:40.383Z",
+       "offerScope": "Restocking 20-lb cylinder exchange cages at convenience stores",
+       "priceCents": 2200,
+       "currency": "USD",
+       "fulfillmentOwner": "Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered)",
+       "peakFundingCents": 0,
+       "humanHours": 0.1,
+       "requiredCapabilities": [],
+       "industry": "propane distribution",
+       "mechanism": "RESALE_OR_ASSET",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three service managers who signed work orders | reach: Visits to stores in the county"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 8100 USD | price 22 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 8100 USD | measured on this offer's own sales: 30 accepted of 140 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "a one-off needs its one buyer | 561 deal(s) needed but only 560 in the window (140 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Keystone Gas Services LLC (quoted $95 a tank, $1,425 a batch; licensed propane t (a source says so) | fulfilled by Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 1425, tied up 0 | each deal loses money: a cost of 23 against a price of 22"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "16 days to usable cash against 30 left | 7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "140 convenience stores in the county host exchange cages and restock weekly.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Restocking 20-lb cylinder exchange cages at convenience stores to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "30 paid orders from 140 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$23",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Tri-State Cylinder Filling (quoted $23 per filled cylinder delivered) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Convenience-store managers hosting exchange cages",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Convenience stores pay the restocker $22 per filled 20-lb cylinder delivered to the cage (distributor price sheet, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 350000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:56:17.469Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_66fc3824f888_622d26",
+    "revisionDigest": "66fc3824f888b2042ee82459",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c3318c7db37f4b50be19/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d66909317fc74962be83/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Every link of the one member (cop_29ad...) rests on its own record: three WRITTEN_ACCEPTANCE agreements at $2,700 each (a real purchase price from the paying buyers themselves), a supplier quote of $95/tank = $1,425/batch from the recorded fulfiller Keystone, payment 10 days after each batch and Keystone paid from each receipt within 2 days. Recomputed: 3 x $2,700 = $8,100; 3 x $1,425 = $4,275; net $3,825 >= $3,500 target. Capacity 10 tanks/day from day 2 covers 45 tanks by day 6 (batches complete days 3, 4, 6 as stated); receipts days 13/14/16, last supplier payment day 18, all inside 30 days. Ledger trace: owner funded $0, minimum cash $2,700 (never negative), exposure $0 against a $0 cap. Excluded cylinder restock correctly rejected: $23 cost > $22 price.",
+    "findings": [
+     "Arithmetic checked: $8,100 collected - $4,275 Keystone = $3,825 net, $325 above target; ledger matches steps.",
+     "Schedule checked: 45 tanks at 10/day from day 2 completes day 6; dealer payments days 13, 14, 16; Keystone paid days 15, 16, 18; all within 30 days with 12 days slack.",
+     "No capital: Keystone is paid out of each dealer receipt, so cash never goes below $0 (trace minCash $2,700, ownerFunded $0).",
+     "Thin margin: target is met only if all three dealers pay in full; a single default or a dispute misses it. Plan should watch collections closely.",
+     "Execution capabilities (SEND_A_MESSAGE, ISSUE_AN_INVOICE, PAY_A_SUPPLIER) are NOT_CONNECTED/NOT_DECLARED; these must be connected before steps run, but they are operational, not evidence gaps.",
+     "members[].ownerHours is null though the card records humanHours 1; contract states no hours ceiling so it fits, but should carry the 1 hour.",
+     "Brain's own check lists the deliver step owner as PERSON while the card and plan name Keystone as fulfiller; the plan's performer (Keystone) matches the record."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:59:13.913Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_66fc3824f888_622d26",
+   "digest": "66fc3824f888b2042ee82459",
+   "contractDigest": "f1c7857a222afc0f60ace512",
+   "plan": {
+    "goalId": "wst_0524feef49544ebd8493",
+    "contractDigest": "f1c7857a222afc0f60ace512",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed propane-dealer leak-check batches through Keystone",
+     "opportunityIds": [
+      "cop_29ad1c33af13485a947c"
+     ],
+     "why": "Three dealers signed written work orders at $2,700 a batch ($8,100). Keystone's quote is $1,425 a batch ($4,275), paid out of each dealer's payment, so no capital is advanced. Net contribution $3,825 >= $3,500; the last dealer pays on day 16 and Keystone is paid by day 18, inside 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Restock 20-lb cylinder exchange cages",
+      "why": "Rejected: each cylinder costs $23 from Tri-State against a $22 price, so every deal loses money, and 140 stores x 4 restocks cannot reach the target anyway."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the three signed work orders ($2,700 per 15-tank batch) and schedule the batches with each service manager",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_agree"
+      ],
+      "priceCents": 270000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Keystone for 45 tank checks starting day 2 (10 tanks a day), paid from each dealer's payment within 2 days",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_ful"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 1's 15 tanks (batch complete day 3)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 3,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Collect dealer 1's $2,700 (due 10 days after batch completion, day 13) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 2's 15 tanks (batch complete day 4)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 4,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Collect dealer 2's $2,700 (due 10 days after batch completion, day 14) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver3",
+      "kind": "DELIVER",
+      "label": "Keystone performs leak and pressure checks on dealer 3's 15 tanks (batch complete day 6)",
+      "performer": "Keystone Gas Services LLC",
+      "costCents": 142500,
+      "day": 6,
+      "dependsOn": "order",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Gas Services LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect3",
+      "kind": "COLLECT",
+      "label": "Collect dealer 3's $2,700 (due 10 days after batch completion, day 16) and pay Keystone $1,425 from it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 16,
+      "dependsOn": "deliver3",
+      "evidence": [
+       "s_ttc",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 1 pays for its batch",
+      "settlesDay": 13,
+      "stepId": "collect1"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 1's batch from the receipt",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 2 pays for its batch",
+      "settlesDay": 14,
+      "stepId": "collect2"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 2's batch from the receipt",
+      "stepId": "deliver2"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 270000,
+      "label": "Dealer 3 pays for its batch",
+      "settlesDay": 16,
+      "stepId": "collect3"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 142500,
+      "label": "Pay Keystone for dealer 3's batch from the receipt",
+      "stepId": "deliver3"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "signed batches",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "batches",
+      "sources": [
+       "s_price",
+       "s_agree"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per batch",
+      "status": "EVIDENCED",
+      "value": 270000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Keystone cost per batch",
+      "status": "EVIDENCED",
+      "value": 142500,
+      "unit": "cents",
+      "sources": [
+       "s_cost",
+       "s_ful"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net contribution",
+      "status": "EVIDENCED",
+      "value": 382500,
+      "unit": "cents",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to last usable cash",
+      "status": "EVIDENCED",
+      "value": 16,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Keystone capacity",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "tanks per day",
+      "sources": [
+       "s_ful"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#price",
+      "dated": "2026-11",
+      "claim": "Three dealers signed work orders at $2,700 per batch of 15 customer-tank leak checks",
+      "population": "three independent propane dealers' service managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#agreements",
+      "dated": "2026-11",
+      "claim": "Three WRITTEN_ACCEPTANCE agreements, AGREED, $2,700 each",
+      "population": "the three signing dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $1,425 per batch (Keystone $95 a tank)",
+      "population": "Keystone Gas Services LLC quote",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#fulfillment",
+      "dated": "2026-11",
+      "claim": "Keystone Gas Services LLC, licensed propane technicians, tests 10 tanks a day from day 2, paid from each dealer's payment within 2 days of receipt",
+      "population": "Keystone Gas Services LLC",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "16 days to usable cash; each dealer pays 10 days after its batch is completed",
+      "population": "the three signing dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_29ad1c33af13485a947c#exposure",
+      "dated": "2026-11",
+      "claim": "Exposure $0: supplier paid out of the dealer's payment",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_29ad1c33af13485a947c"
+     },
+     {
+      "id": "s_xprice",
+      "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#price",
+      "dated": "2026-11",
+      "claim": "Stores pay $22 per filled cylinder",
+      "population": "county convenience stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e39b282ab6204a519a6d"
+     },
+     {
+      "id": "s_xcost",
+      "url": "https://brain.local/card/cop_e39b282ab6204a519a6d#directCosts",
+      "dated": "2026-11",
+      "claim": "Tri-State charges $23 per filled cylinder delivered",
+      "population": "Tri-State Cylinder Filling",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e39b282ab6204a519a6d"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_29ad1c33af13485a947c",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_e39b282ab6204a519a6d",
+      "missing": [
+       "MARKET_VOLUME",
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e39b282ab6204a519a6d",
+      "why": "Loses money on every deal: $23 direct cost per cylinder against a $22 price (card directCosts and price)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_29ad1c33af13485a947c",
+      "deals": 3,
+      "price": 2700,
+      "directCost": 1425,
+      "capital": 0,
+      "settlesDay": 16,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_66fc3824f888_622d26",
+    "digest": "66fc3824f888b2042ee82459",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c3318c7db37f4b50be19/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:45.514Z"
+   },
+   "review": {
+    "revisionId": "rev_66fc3824f888_622d26",
+    "revisionDigest": "66fc3824f888b2042ee82459",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c3318c7db37f4b50be19/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d66909317fc74962be83/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Every link of the one member (cop_29ad...) rests on its own record: three WRITTEN_ACCEPTANCE agreements at $2,700 each (a real purchase price from the paying buyers themselves), a supplier quote of $95/tank = $1,425/batch from the recorded fulfiller Keystone, payment 10 days after each batch and Keystone paid from each receipt within 2 days. Recomputed: 3 x $2,700 = $8,100; 3 x $1,425 = $4,275; net $3,825 >= $3,500 target. Capacity 10 tanks/day from day 2 covers 45 tanks by day 6 (batches complete days 3, 4, 6 as stated); receipts days 13/14/16, last supplier payment day 18, all inside 30 days. Ledger trace: owner funded $0, minimum cash $2,700 (never negative), exposure $0 against a $0 cap. Excluded cylinder restock correctly rejected: $23 cost > $22 price.",
+    "findings": [
+     "Arithmetic checked: $8,100 collected - $4,275 Keystone = $3,825 net, $325 above target; ledger matches steps.",
+     "Schedule checked: 45 tanks at 10/day from day 2 completes day 6; dealer payments days 13, 14, 16; Keystone paid days 15, 16, 18; all within 30 days with 12 days slack.",
+     "No capital: Keystone is paid out of each dealer receipt, so cash never goes below $0 (trace minCash $2,700, ownerFunded $0).",
+     "Thin margin: target is met only if all three dealers pay in full; a single default or a dispute misses it. Plan should watch collections closely.",
+     "Execution capabilities (SEND_A_MESSAGE, ISSUE_AN_INVOICE, PAY_A_SUPPLIER) are NOT_CONNECTED/NOT_DECLARED; these must be connected before steps run, but they are operational, not evidence gaps.",
+     "members[].ownerHours is null though the card records humanHours 1; contract states no hours ceiling so it fits, but should carry the 1 hour.",
+     "Brain's own check lists the deliver step owner as PERSON while the card and plan name Keystone as fulfiller; the plan's performer (Keystone) matches the record."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:59:13.913Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Keep $3,500 of net settled cash after direct costs within 30 days using no up-front capital.",
+    "terms": "afc328ec1e09d81c",
+    "openings": {
+     "cop_29ad1c33af13485a947c": "94709ad71f02caeb",
+     "cop_e39b282ab6204a519a6d": "bd3102f16c15bcb0"
+    }
+   },
+   "at": "2026-11-28T06:01:48.761Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

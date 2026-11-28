@@ -439,8 +439,8 @@ export function applyGate(input: {
       reject(
         claim,
         'SOURCE_SUPPORTS',
-        verdict.note.trim().length > 0
-          ? verdict.note
+        (verdict.note ?? '').trim().length > 0
+          ? verdict.note!
           : 'Verification found the source does not directly support this claim.',
       );
       continue;

@@ -1,0 +1,200 @@
+{
+ "caseId": "av-12-museum-grant-as-price",
+ "keys": {
+  "cop_f92aa8528d8f44839358": "collectionsAssessment"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 8000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 39168× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Directors of small history museums — A written \" needs [figure withheld] and keeps [figure withheld], 4930× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Directors of small history museums\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f92aa8528d8f44839358"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Directors of small history museums",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Directors of small history museums",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 436.6248443549428
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 8000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_f92aa8528d8f44839358",
+    "title": "Collections-care needs assessment for small history museums",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Directors of small history museums",
+     "reachableChannel": "Email to the museums listed in the state museum association's directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:58.388Z",
+     "offerScope": "A written collections-care needs assessment built by Brain from the museum's inventory and storage survey.",
+     "priceCents": 500000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "small history museums",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the museums listed in the state museum association's directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 4 accepted of 50 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 40, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "210 small history museums are listed with director emails in the state museum association's directory; each documents collections-care needs for accreditation.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A written collections-care needs assessment built by Brain from the museum's inventory and storage survey. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "4 paid orders from 50 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$40",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Directors of small history museums",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The state humanities council awards small museums $5,000 project grants for collections care (grant guidelines, 2026 cycle).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 800000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:56:17.536Z"
+ }
+}

@@ -1027,7 +1027,7 @@ const REVIEW_INSTRUCTIONS =
         'test does not take buyers’ orders before the opening’s fulfilment is shown possible, and that passing it at its threshold carries ' +
   'the target; record brain_planning_review with verdict PASS or REVISE, ' +
         'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
-  'prerequisite it rests on; against a price Brain’s planner establishes, name its `defect` (PERSON_WORD, CONTRADICTED or NOT_A_PURCHASE) or let it stand — ' +
+  'prerequisite it rests on; against a price Brain’s planner establishes, name its `defect` (PERSON_WORD, CONTRADICTED or NOT_A_PURCHASE with `nonPurchase`: the reward, bounty, grant, prize, rebate, settlement, wage or other buyer\'s claim it is) or let it stand; a directly comparable offer\'s current price is an evidenced price, never a non-purchase — ' +
         'then brain_complete_work. The author of the revision may not review it: release the item if that is you.';
 
 /** The queue's work type for an independent plan review; one item per revision. */

@@ -208,6 +208,19 @@ const verifyResearchTool: McpTool = {
 export function verdictsArg(args: Record<string, unknown>): unknown[] {
   const v = args['verdicts'];
   if (!Array.isArray(v) || v.length === 0) throw invalidInput('`verdicts` is required: one verdict per submitted claim (see brain_planning_context)');
+  // Each verdict in the shape the gate reads (run 15, fleet-2: a verdict sent its reasoning as `basis`, not `note`, and
+  // the gate threw on every attempt, so the research could never be judged).
+  v.forEach((x, i) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const scope = o['scopeMatch'] as Record<string, unknown> | undefined;
+    const missing = [
+      typeof o['claimId'] !== 'string' ? 'claimId' : null,
+      typeof o['supportsClaim'] !== 'boolean' ? 'supportsClaim (true or false)' : null,
+      typeof o['note'] !== 'string' ? 'note (what the source says, in your words)' : null,
+      !scope || typeof scope !== 'object' || ['geography', 'timeframe', 'population', 'definitions'].some((k) => typeof scope[k] !== 'string') ? 'scopeMatch {geography, timeframe, population, definitions}' : null,
+    ].filter(Boolean);
+    if (missing.length) throw invalidInput(`verdicts[${i}] needs ${missing.join(', ')}`);
+  });
   return v;
 }
 export function sufficiencyArg(args: Record<string, unknown>): 'SUFFICIENT' | 'INSUFFICIENT' {
@@ -268,7 +281,7 @@ const reviewTool: McpTool = {
           '(field) that shows it; MISSING_PREREQUISITE names a field no EVIDENCE fact on the card carries. A condition without either is refused.',
         items: {
           type: 'object',
-          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' }, defect: { type: 'string', enum: ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'], description: 'Against a price Brain\u2019s planner establishes: the defect the record shows. Required there.' } },
+          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' }, defect: { type: 'string', enum: ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'], description: 'Against a price Brain\u2019s planner establishes: the defect the record shows. Required there.' }, nonPurchase: { type: 'string', enum: ['REWARD', 'BOUNTY', 'GRANT', 'PRIZE', 'REBATE', 'SETTLEMENT', 'WAGE', 'ANOTHER_BUYERS_CLAIM'], description: 'With NOT_A_PURCHASE: what payment the figure is instead. A directly comparable offer\u2019s current price is an evidenced price, not one of these.' } },
           required: ['opportunityId', 'link', 'basis', 'field', 'why'],
           additionalProperties: false,
         },

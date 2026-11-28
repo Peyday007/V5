@@ -1,0 +1,1530 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_b353aa31e77049a3911c",
+   "words": "Find me a way to make $6,000 within 45 days selling to small trucking companies only (fleets under 20 trucks). I can put up to $1,000 into it.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": 100000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "$6,000 received from small trucking companies (fleets under 20 trucks) within 45 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "621704d331bb6edc23ab0f0e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_b353aa31e77049a3911c",
+    "contractDigest": "621704d331bb6edc23ab0f0e",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: a $20 presale test of a new-entrant safety-program package for carriers granted authority in the last 60 days that run 1-19 trucks",
+     "opportunityIds": [],
+     "why": "New-entrant compliance is the strongest of the three discovered openings. Every new interstate carrier must pass the FMCSA New Entrant Safety Audit, and FTR counted just over 5,000 new authorizations in October 2025. It is not established, though. The only price found ($325, Trucksafe's New Entrant Bundle) failed verification as a price paid by this population. No buying signal or close rate is recorded, and the market volume rests on a 2025 count that a 2025 identity-verification crackdown roughly halved. The UCR filing route has a real deadline (2027 registration due before Jan 1, 2027; the government fee is $55 for 0-2 vehicles). But its $75 service fee is unestablished and OOIDA reports carriers distrust third-party UCR vendors. Dispatching has no established price or demand and needs the owner on load boards daily. A cheap live presale is the only way to measure price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "2027 UCR filing service before Dec 31",
+      "why": "The deadline is real, but the $75 service fee has no source of buyers paying it, the carrier can file direct for $55 in minutes, OOIDA warns members against third-party UCR vendors, and about 80 sales would be needed in roughly 33 days."
+     },
+     {
+      "title": "Owner-run dispatching at $250/week per truck",
+      "why": "No buyer is shown paying this price in 2026; the only dated rate (5% per load) is from 2022. Demand is unrecorded. About 24 truck-weeks are needed, with the owner working the load boards daily."
+     }
+    ],
+    "steps": [
+     {
+      "id": "f1",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: owner assembles one complete sample package (DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit checklist) from FMCSA's published New Entrant requirements, and times it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_hours"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "r0",
+      "kind": "RESEARCH",
+      "label": "Brain pulls carriers granted authority in the last 60 days with 1-19 power units and a listed email from FMCSA public registration data, and drafts the offer email",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "f1",
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "r1",
+      "kind": "REACH",
+      "label": "Owner buys a sending domain and mailbox and sends the $325 offer, with a payment link, to 300 of those carriers over 5 days",
+      "performer": "OWNER",
+      "costCents": 2000,
+      "day": 3,
+      "dependsOn": "r0",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 4,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Day 12: count paid orders, replies and objections on price against the proof and stop thresholds",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "r1",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Sending domain ($12) and one month of a mailbox ($8)",
+      "stepId": "r1"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per package",
+      "sources": [
+       "s1"
+      ],
+      "needs": "A price that small new carriers are shown to pay. Trucksafe's $325 failed verification as this population's price."
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per carrier emailed",
+      "sources": [],
+      "needs": "Measured by the presale"
+     },
+     {
+      "name": "q_buyers",
+      "status": "ESTIMATE",
+      "value": 5000,
+      "unit": "new carrier authorizations per month (Oct 2025)",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": "A 2026 count limited to fleets of 1-19 trucks"
+     },
+     {
+      "name": "q_fulfil_hours",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "owner hours per package",
+      "sources": [],
+      "needs": "Measured in step f1"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.trucksafe.com/product-page/new-entrant-bundle",
+      "dated": "2026",
+      "claim": "Trucksafe lists its New Entrant Bundle of safety-program documents for new carriers at $325.00 (rejected by verification as a price for this exact population)",
+      "population": "New motor carriers generally",
+      "matchesBuyer": false,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.ryantrans.com/november-2025-industry-update-truckload-capacity-outlook",
+      "dated": "2025-11",
+      "claim": "FMCSA authorized just over 5,000 new carriers in October 2025, against 4,473 in September",
+      "population": "New for-hire motor carriers (all sizes)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.freightwaves.com/?p=536455",
+      "dated": "2025-05-29",
+      "claim": "Identity verification cut the filed-to-published conversion of authorities from about 60-65% to about 30% (a roughly 50% decline in published authorities)",
+      "population": "New operating-authority applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program",
+      "dated": "2026",
+      "claim": "New entrant carriers must undergo a safety audit within their first 12 months of operation",
+      "population": "New USDOT motor carriers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/html/2026-17893.htm",
+      "dated": "2026-09-01",
+      "claim": "The 2027 UCR fee is $55 for 0-2 vehicles, $167 for 3-5 and $333 for 6-20",
+      "population": "Interstate motor carriers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_13a75427d8b5418bae12"
+     },
+     {
+      "id": "s6",
+      "url": "https://landline.media/ucr-fee-season-pay-the-fund-not-the-hustlers/",
+      "dated": "2026",
+      "claim": "OOIDA reports third-party UCR vendors using scare tactics and adding hefty service charges, and advises carriers to pay the UCR fund directly",
+      "population": "Small carriers / OOIDA members",
+      "matchesBuyer": true,
+      "opportunityId": "cop_13a75427d8b5418bae12"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.freightwaves.com/news/trucker-path-moves-into-dispatching-opens-with-dozen-dispatchers",
+      "dated": "2022-03-24",
+      "claim": "Trucker Path's dispatcher fee is 5% per load, with market rates ranging from 4% to 15%, aimed at owner-operators and small fleets",
+      "population": "Owner-operators and small fleets",
+      "matchesBuyer": true,
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No discovered opening has a price that small trucking companies are shown to pay, or a measured close rate. The new-entrant package's only price source failed verification for this population, and its buyer count is a 2025 figure that the 2025 identity checks roughly halved.",
+     "resolution": "Run a $20 presale over days 1-12. (1) The owner builds one sample package and times it (3 h); stop if it takes more than 3 hours a package. (2) Brain pulls 300 carriers granted authority in the last 60 days with 1-19 power units from FMCSA public data. (3) The owner emails them the $325 offer with a payment link. Proof: at least 3 paid orders by day 12 (about 1%), which establishes the price, demand and a close rate; about 19 sales then carry $6,000 by day 45 from about 1,900 emails. Continue: scale outreach through days 13-40 within the $1,000 cap. Stop: 0 paid orders from 300, or more than half of replies refusing on price. Then retest once at $149 to 300 more carriers, and report NO_PLAN if that also yields fewer than 3 orders.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_13a75427d8b5418bae12",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7a12f0470d2f458b8d6e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_7a12f0470d2f458b8d6e",
+      "deals": 19,
+      "price": 325,
+      "directCost": 10,
+      "capital": 300,
+      "settlesDay": null,
+      "ownerHours": 38
+     },
+     {
+      "opportunityId": "cop_13a75427d8b5418bae12",
+      "deals": 80,
+      "price": 75,
+      "directCost": 3,
+      "capital": 200,
+      "settlesDay": null,
+      "ownerHours": 40
+     },
+     {
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+      "deals": 24,
+      "price": 250,
+      "directCost": 45,
+      "capital": 200,
+      "settlesDay": null,
+      "ownerHours": 240
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "FULFILMENT",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_cb9c8d13f052_ac2614",
+    "digest": "cb9c8d13f05235369705beaf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7af7daea0cb24f28ae54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:59.074Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_b353aa31e77049a3911c",
+   "contractDigest": "621704d331bb6edc23ab0f0e",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: a $20 presale test of a new-entrant safety-program package for carriers granted authority in the last 60 days that run 1-19 trucks",
+    "opportunityIds": [],
+    "why": "New-entrant compliance is the strongest of the three discovered openings. Every new interstate carrier must pass the FMCSA New Entrant Safety Audit, and FTR counted just over 5,000 new authorizations in October 2025. It is not established, though. The only price found ($325, Trucksafe's New Entrant Bundle) failed verification as a price paid by this population. No buying signal or close rate is recorded, and the market volume rests on a 2025 count that a 2025 identity-verification crackdown roughly halved. The UCR filing route has a real deadline (2027 registration due before Jan 1, 2027; the government fee is $55 for 0-2 vehicles). But its $75 service fee is unestablished and OOIDA reports carriers distrust third-party UCR vendors. Dispatching has no established price or demand and needs the owner on load boards daily. A cheap live presale is the only way to measure price, demand and conversion together."
+   },
+   "alternatives": [
+    {
+     "title": "2027 UCR filing service before Dec 31",
+     "why": "The deadline is real, but the $75 service fee has no source of buyers paying it, the carrier can file direct for $55 in minutes, OOIDA warns members against third-party UCR vendors, and about 80 sales would be needed in roughly 33 days."
+    },
+    {
+     "title": "Owner-run dispatching at $250/week per truck",
+     "why": "No buyer is shown paying this price in 2026; the only dated rate (5% per load) is from 2022. Demand is unrecorded. About 24 truck-weeks are needed, with the owner working the load boards daily."
+    }
+   ],
+   "steps": [
+    {
+     "id": "f1",
+     "kind": "TEST",
+     "label": "Fulfilment check before any sale: owner assembles one complete sample package (DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit checklist) from FMCSA's published New Entrant requirements, and times it",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_hours"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "r0",
+     "kind": "RESEARCH",
+     "label": "Brain pulls carriers granted authority in the last 60 days with 1-19 power units and a listed email from FMCSA public registration data, and drafts the offer email",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "f1",
+     "evidence": [
+      "q_buyers"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "r1",
+     "kind": "REACH",
+     "label": "Owner buys a sending domain and mailbox and sends the $325 offer, with a payment link, to 300 of those carriers over 5 days",
+     "performer": "OWNER",
+     "costCents": 2000,
+     "day": 3,
+     "dependsOn": "r0",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Day 12: count paid orders, replies and objections on price against the proof and stop thresholds",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "r1",
+     "evidence": [
+      "q_conversion",
+      "q_price"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Sending domain ($12) and one month of a mailbox ($8)",
+     "stepId": "r1"
+    }
+   ],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per package",
+     "sources": [
+      "s1"
+     ],
+     "needs": "A price that small new carriers are shown to pay. Trucksafe's $325 failed verification as this population's price."
+    },
+    {
+     "name": "q_conversion",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per carrier emailed",
+     "sources": [],
+     "needs": "Measured by the presale"
+    },
+    {
+     "name": "q_buyers",
+     "status": "ESTIMATE",
+     "value": 5000,
+     "unit": "new carrier authorizations per month (Oct 2025)",
+     "sources": [
+      "s2",
+      "s3"
+     ],
+     "needs": "A 2026 count limited to fleets of 1-19 trucks"
+    },
+    {
+     "name": "q_fulfil_hours",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "owner hours per package",
+     "sources": [],
+     "needs": "Measured in step f1"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.trucksafe.com/product-page/new-entrant-bundle",
+     "dated": "2026",
+     "claim": "Trucksafe lists its New Entrant Bundle of safety-program documents for new carriers at $325.00 (rejected by verification as a price for this exact population)",
+     "population": "New motor carriers generally",
+     "matchesBuyer": false,
+     "opportunityId": "cop_7a12f0470d2f458b8d6e"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.ryantrans.com/november-2025-industry-update-truckload-capacity-outlook",
+     "dated": "2025-11",
+     "claim": "FMCSA authorized just over 5,000 new carriers in October 2025, against 4,473 in September",
+     "population": "New for-hire motor carriers (all sizes)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7a12f0470d2f458b8d6e"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freightwaves.com/?p=536455",
+     "dated": "2025-05-29",
+     "claim": "Identity verification cut the filed-to-published conversion of authorities from about 60-65% to about 30% (a roughly 50% decline in published authorities)",
+     "population": "New operating-authority applicants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7a12f0470d2f458b8d6e"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program",
+     "dated": "2026",
+     "claim": "New entrant carriers must undergo a safety audit within their first 12 months of operation",
+     "population": "New USDOT motor carriers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7a12f0470d2f458b8d6e"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/html/2026-17893.htm",
+     "dated": "2026-09-01",
+     "claim": "The 2027 UCR fee is $55 for 0-2 vehicles, $167 for 3-5 and $333 for 6-20",
+     "population": "Interstate motor carriers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_13a75427d8b5418bae12"
+    },
+    {
+     "id": "s6",
+     "url": "https://landline.media/ucr-fee-season-pay-the-fund-not-the-hustlers/",
+     "dated": "2026",
+     "claim": "OOIDA reports third-party UCR vendors using scare tactics and adding hefty service charges, and advises carriers to pay the UCR fund directly",
+     "population": "Small carriers / OOIDA members",
+     "matchesBuyer": true,
+     "opportunityId": "cop_13a75427d8b5418bae12"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.freightwaves.com/news/trucker-path-moves-into-dispatching-opens-with-dozen-dispatchers",
+     "dated": "2022-03-24",
+     "claim": "Trucker Path's dispatcher fee is 5% per load, with market rates ranging from 4% to 15%, aimed at owner-operators and small fleets",
+     "population": "Owner-operators and small fleets",
+     "matchesBuyer": true,
+     "opportunityId": "cop_33f9d4f7f28d406e8c1c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No discovered opening has a price that small trucking companies are shown to pay, or a measured close rate. The new-entrant package's only price source failed verification for this population, and its buyer count is a 2025 figure that the 2025 identity checks roughly halved.",
+    "resolution": "Run a $20 presale over days 1-12. (1) The owner builds one sample package and times it (3 h); stop if it takes more than 3 hours a package. (2) Brain pulls 300 carriers granted authority in the last 60 days with 1-19 power units from FMCSA public data. (3) The owner emails them the $325 offer with a payment link. Proof: at least 3 paid orders by day 12 (about 1%), which establishes the price, demand and a close rate; about 19 sales then carry $6,000 by day 45 from about 1,900 emails. Continue: scale outreach through days 13-40 within the $1,000 cap. Stop: 0 paid orders from 300, or more than half of replies refusing on price. Then retest once at $149 to 300 more carriers, and report NO_PLAN if that also yields fewer than 3 orders.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_13a75427d8b5418bae12",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_7a12f0470d2f458b8d6e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_7a12f0470d2f458b8d6e",
+     "deals": 19,
+     "price": 325,
+     "directCost": 10,
+     "capital": 300,
+     "settlesDay": null,
+     "ownerHours": 38
+    },
+    {
+     "opportunityId": "cop_13a75427d8b5418bae12",
+     "deals": 80,
+     "price": 75,
+     "directCost": 3,
+     "capital": 200,
+     "settlesDay": null,
+     "ownerHours": 40
+    },
+    {
+     "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+     "deals": 24,
+     "price": 250,
+     "directCost": 45,
+     "capital": 200,
+     "settlesDay": null,
+     "ownerHours": 240
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "FULFILMENT",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_cb9c8d13f052_ac2614",
+   "digest": "cb9c8d13f05235369705beaf",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7af7daea0cb24f28ae54/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:11:59.074Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_cb9c8d13f052_ac2614",
+   "digest": "cb9c8d13f05235369705beaf",
+   "contractDigest": "621704d331bb6edc23ab0f0e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 2000,
+    "committedOpenCents": 0,
+    "preProofCents": 2000,
+    "maxExposureCents": 2000,
+    "minCashCents": 98000,
+    "minCashDay": 3,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": -2000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: 2027 UCR registration filing s + Owner-run truck dispatching fo + New-entrant safety program doc\", and what it is missing first is an offer and a price. Research first: the deep dives on \"New-entrant safety program document package for newly author\", \"Owner-run truck dispatching for owner-operators, flat weekly\", \"2027 UCR registration filing service before the Dec 31 deadl\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 3 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Sell \"New-entrant safety program document package for newly authorized small carriers\" through a partner who already…; Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 75.9% (p50 $14,637): a hypothesis to test by running each one's kill criterion, not evidence.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_7a12f0470d2f458b8d6e",
+     "cop_33f9d4f7f28d406e8c1c",
+     "cop_13a75427d8b5418bae12"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dives on \"New-entrant safety program document package for newly author\", \"Owner-run truck dispatching for owner-operators, flat weekly\", \"2027 UCR registration filing service before the Dec 31 deadl\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+      "title": "Owner-run truck dispatching for owner-operators, flat weekly fee",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 250,
+      "card": {
+       "payer": "Owner-operators and 1-5 truck fleets without a dispatcher",
+       "reachableChannel": "Trucker forums, Facebook groups, FMCSA census cold calls",
+       "offerScope": "Load finding and broker negotiation for a flat $250/week per truck",
+       "priceCents": 25000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 20000,
+       "humanHours": 10,
+       "requiredCapabilities": [],
+       "industry": "trucking",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Trucker forums, Facebook groups, FMCSA census cold calls"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 45, tied up 200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "8 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Trucker forums, Facebook groups, FMCSA census cold calls",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Load finding and broker negotiation for a flat $250/week per truck to Owner-operators and 1-5 truck fleets without a dispatcher, reached through Trucker forums, Facebook groups, FMCSA census cold calls, at $250; Owner as dispatcher (load boards) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$45",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner as dispatcher (load boards).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "10 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Load finding and broker negotiation for a flat $250/week per truck",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owner-operators and 1-5 truck fleets without a dispatcher",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freightwaves.com/news/a-practical-guide-to-truck-dispatching-services; https://dat.com/solutions/owner-operator-dispatch-services; https://www.freightwaves.com/news/trucker-path-moves-into-dispatching-opens-with-dozen-dispatchers",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "8 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_13a75427d8b5418bae12",
+      "title": "2027 UCR registration filing service before the Dec 31 deadline",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 75,
+      "card": {
+       "payer": "Interstate carriers with 0-20 trucks not yet registered for 2027 UCR",
+       "reachableChannel": "Cold email/phone to carriers from FMCSA census data",
+       "offerScope": "File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee",
+       "priceCents": 7500,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 20000,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "trucking compliance",
+       "mechanism": "TEMPORARY_EXPLOIT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email/phone to carriers from FMCSA census data"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 75 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 3, tied up 200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "3 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email/phone to carriers from FMCSA census data",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee to Interstate carriers with 0-20 trucks not yet registered for 2027 UCR, reached through Cold email/phone to carriers from FMCSA census data, at $75; Owner files on plan.ucr.gov with carrier data delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$3",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner files on plan.ucr.gov with carrier data.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Interstate carriers with 0-20 trucks not yet registered for 2027 UCR",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$75",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$75",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/html/2026-17893.htm; https://landline.media/ucr-fee-season-pay-the-fund-not-the-hustlers/; https://www.freightwaves.com/?p=584916",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_7a12f0470d2f458b8d6e",
+      "title": "New-entrant safety program document package for newly authorized small carriers",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit",
+       "reachableChannel": "FMCSA register of newly granted authorities (public), cold email/phone from the owner",
+       "offerScope": "Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain",
+       "priceCents": 32500,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 30000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "trucking compliance",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: FMCSA register of newly granted authorities (public), cold email/phone from the "
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 325 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "76 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "19 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 10, tied up 300"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "FMCSA register of newly granted authorities (public), cold email/phone from the owner",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "5,000 Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit (FTR: just over 5,000 new carriers authorized in October 2025; 2026 counts reportedly about halved by identity verification)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain to Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit, reached through FMCSA register of newly granted authorities (public), cold email/phone from the owner, at $325; The owner assembles and customizes the package from regulatory templates delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner assembles and customizes the package from regulatory templates.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$325",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$325",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.trucksafe.com/product-page/new-entrant-bundle; https://ai.fmcsa.dot.gov/newentrant/SafetyAudits.aspx; https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program; https://www.ryantrans.com/november-2025-industry-update-truckload-capacity-outlook; https://www.freightwaves.com/?p=536455",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T06:11:05.737Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_cb9c8d13f052_ac2614",
+    "revisionDigest": "cb9c8d13f05235369705beaf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7af7daea0cb24f28ae54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_f26b89b0f13f43b3adb2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right: none of the three trucking openings has a price small carriers are shown to pay (Trucksafe's $325 is another seller's listing and I verified it fails scope), a buying signal or a close rate; the decisive links named (OFFER_AND_PRICE, CONVERSION, CURRENT_DEMAND) are those the evidence decides, and nothing is called a constraint. All three stay inside the owner's buyer restriction (fleets under 20 trucks). The recommended presale is sound: fulfilment is checked first (owner builds and times one sample package on day 1, stop above 3 h) before any offer goes out on day 3; spend is $20 against the $1,000 cap. Recomputed: proof 3 paid of 300 = 1%; 19 sales x $325 = $6,175 >= $6,000 from ~1,900 emails at 1%; the pool of carriers authorized in the last 60 days with 1-19 trucks is plausibly several thousand, enough for 1,900. UCR and dispatching alternatives are correctly not adopted (UCR: $75 fee unsourced, carrier can file direct for $55, OOIDA warns against vendors, ~80 sales; dispatching: no 2026 price, 240 owner hours).",
+    "findings": [
+     "Volume caveat repeated from my verification of the buyerVolume research: the April 2025 identity-verification drop predates the Sept-Oct 2025 FTR counts, so those ~5,000/month were already measured after it - 'a 2025 count the crackdown roughly halved' is not what the sources show. Neither source gives a 1-19-truck split or a 2026 count; the test's own FMCSA pull will measure it.",
+     "Deliverability: 300 emails over 5 days from a sending domain and mailbox bought on day 3 have no warmup; a low inbox rate would read as low demand. Add a bounce/spam stop so a channel failure is not mistaken for a price failure.",
+     "Settlement: the payment link's first payout may lag 7-14 days on a new processor account; the continue phase should set a last order day (~day 30-35) for cash to settle by day 45.",
+     "$149 retest: state whether passing it can still carry $6,000 (41 sales, ~4,100 emails at 1% in the days left) before running it; otherwise it cannot change the answer.",
+     "Owner hours: ~3 h a package x 19 = ~57 h plus outreach; the contract sets no ceiling, but it should be stated to the owner."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:15:06.492Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_cb9c8d13f052_ac2614",
+   "digest": "cb9c8d13f05235369705beaf",
+   "contractDigest": "621704d331bb6edc23ab0f0e",
+   "plan": {
+    "goalId": "wst_b353aa31e77049a3911c",
+    "contractDigest": "621704d331bb6edc23ab0f0e",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: a $20 presale test of a new-entrant safety-program package for carriers granted authority in the last 60 days that run 1-19 trucks",
+     "opportunityIds": [],
+     "why": "New-entrant compliance is the strongest of the three discovered openings. Every new interstate carrier must pass the FMCSA New Entrant Safety Audit, and FTR counted just over 5,000 new authorizations in October 2025. It is not established, though. The only price found ($325, Trucksafe's New Entrant Bundle) failed verification as a price paid by this population. No buying signal or close rate is recorded, and the market volume rests on a 2025 count that a 2025 identity-verification crackdown roughly halved. The UCR filing route has a real deadline (2027 registration due before Jan 1, 2027; the government fee is $55 for 0-2 vehicles). But its $75 service fee is unestablished and OOIDA reports carriers distrust third-party UCR vendors. Dispatching has no established price or demand and needs the owner on load boards daily. A cheap live presale is the only way to measure price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "2027 UCR filing service before Dec 31",
+      "why": "The deadline is real, but the $75 service fee has no source of buyers paying it, the carrier can file direct for $55 in minutes, OOIDA warns members against third-party UCR vendors, and about 80 sales would be needed in roughly 33 days."
+     },
+     {
+      "title": "Owner-run dispatching at $250/week per truck",
+      "why": "No buyer is shown paying this price in 2026; the only dated rate (5% per load) is from 2022. Demand is unrecorded. About 24 truck-weeks are needed, with the owner working the load boards daily."
+     }
+    ],
+    "steps": [
+     {
+      "id": "f1",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: owner assembles one complete sample package (DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit checklist) from FMCSA's published New Entrant requirements, and times it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_hours"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "r0",
+      "kind": "RESEARCH",
+      "label": "Brain pulls carriers granted authority in the last 60 days with 1-19 power units and a listed email from FMCSA public registration data, and drafts the offer email",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "f1",
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "r1",
+      "kind": "REACH",
+      "label": "Owner buys a sending domain and mailbox and sends the $325 offer, with a payment link, to 300 of those carriers over 5 days",
+      "performer": "OWNER",
+      "costCents": 2000,
+      "day": 3,
+      "dependsOn": "r0",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 4,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Day 12: count paid orders, replies and objections on price against the proof and stop thresholds",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "r1",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Sending domain ($12) and one month of a mailbox ($8)",
+      "stepId": "r1"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per package",
+      "sources": [
+       "s1"
+      ],
+      "needs": "A price that small new carriers are shown to pay. Trucksafe's $325 failed verification as this population's price."
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per carrier emailed",
+      "sources": [],
+      "needs": "Measured by the presale"
+     },
+     {
+      "name": "q_buyers",
+      "status": "ESTIMATE",
+      "value": 5000,
+      "unit": "new carrier authorizations per month (Oct 2025)",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": "A 2026 count limited to fleets of 1-19 trucks"
+     },
+     {
+      "name": "q_fulfil_hours",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "owner hours per package",
+      "sources": [],
+      "needs": "Measured in step f1"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.trucksafe.com/product-page/new-entrant-bundle",
+      "dated": "2026",
+      "claim": "Trucksafe lists its New Entrant Bundle of safety-program documents for new carriers at $325.00 (rejected by verification as a price for this exact population)",
+      "population": "New motor carriers generally",
+      "matchesBuyer": false,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.ryantrans.com/november-2025-industry-update-truckload-capacity-outlook",
+      "dated": "2025-11",
+      "claim": "FMCSA authorized just over 5,000 new carriers in October 2025, against 4,473 in September",
+      "population": "New for-hire motor carriers (all sizes)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.freightwaves.com/?p=536455",
+      "dated": "2025-05-29",
+      "claim": "Identity verification cut the filed-to-published conversion of authorities from about 60-65% to about 30% (a roughly 50% decline in published authorities)",
+      "population": "New operating-authority applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program",
+      "dated": "2026",
+      "claim": "New entrant carriers must undergo a safety audit within their first 12 months of operation",
+      "population": "New USDOT motor carriers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a12f0470d2f458b8d6e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/html/2026-17893.htm",
+      "dated": "2026-09-01",
+      "claim": "The 2027 UCR fee is $55 for 0-2 vehicles, $167 for 3-5 and $333 for 6-20",
+      "population": "Interstate motor carriers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_13a75427d8b5418bae12"
+     },
+     {
+      "id": "s6",
+      "url": "https://landline.media/ucr-fee-season-pay-the-fund-not-the-hustlers/",
+      "dated": "2026",
+      "claim": "OOIDA reports third-party UCR vendors using scare tactics and adding hefty service charges, and advises carriers to pay the UCR fund directly",
+      "population": "Small carriers / OOIDA members",
+      "matchesBuyer": true,
+      "opportunityId": "cop_13a75427d8b5418bae12"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.freightwaves.com/news/trucker-path-moves-into-dispatching-opens-with-dozen-dispatchers",
+      "dated": "2022-03-24",
+      "claim": "Trucker Path's dispatcher fee is 5% per load, with market rates ranging from 4% to 15%, aimed at owner-operators and small fleets",
+      "population": "Owner-operators and small fleets",
+      "matchesBuyer": true,
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No discovered opening has a price that small trucking companies are shown to pay, or a measured close rate. The new-entrant package's only price source failed verification for this population, and its buyer count is a 2025 figure that the 2025 identity checks roughly halved.",
+     "resolution": "Run a $20 presale over days 1-12. (1) The owner builds one sample package and times it (3 h); stop if it takes more than 3 hours a package. (2) Brain pulls 300 carriers granted authority in the last 60 days with 1-19 power units from FMCSA public data. (3) The owner emails them the $325 offer with a payment link. Proof: at least 3 paid orders by day 12 (about 1%), which establishes the price, demand and a close rate; about 19 sales then carry $6,000 by day 45 from about 1,900 emails. Continue: scale outreach through days 13-40 within the $1,000 cap. Stop: 0 paid orders from 300, or more than half of replies refusing on price. Then retest once at $149 to 300 more carriers, and report NO_PLAN if that also yields fewer than 3 orders.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_13a75427d8b5418bae12",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7a12f0470d2f458b8d6e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_7a12f0470d2f458b8d6e",
+      "deals": 19,
+      "price": 325,
+      "directCost": 10,
+      "capital": 300,
+      "settlesDay": null,
+      "ownerHours": 38
+     },
+     {
+      "opportunityId": "cop_13a75427d8b5418bae12",
+      "deals": 80,
+      "price": 75,
+      "directCost": 3,
+      "capital": 200,
+      "settlesDay": null,
+      "ownerHours": 40
+     },
+     {
+      "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+      "deals": 24,
+      "price": 250,
+      "directCost": 45,
+      "capital": 200,
+      "settlesDay": null,
+      "ownerHours": 240
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "FULFILMENT",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_cb9c8d13f052_ac2614",
+    "digest": "cb9c8d13f05235369705beaf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7af7daea0cb24f28ae54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:59.074Z"
+   },
+   "review": {
+    "revisionId": "rev_cb9c8d13f052_ac2614",
+    "revisionDigest": "cb9c8d13f05235369705beaf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7af7daea0cb24f28ae54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_f26b89b0f13f43b3adb2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right: none of the three trucking openings has a price small carriers are shown to pay (Trucksafe's $325 is another seller's listing and I verified it fails scope), a buying signal or a close rate; the decisive links named (OFFER_AND_PRICE, CONVERSION, CURRENT_DEMAND) are those the evidence decides, and nothing is called a constraint. All three stay inside the owner's buyer restriction (fleets under 20 trucks). The recommended presale is sound: fulfilment is checked first (owner builds and times one sample package on day 1, stop above 3 h) before any offer goes out on day 3; spend is $20 against the $1,000 cap. Recomputed: proof 3 paid of 300 = 1%; 19 sales x $325 = $6,175 >= $6,000 from ~1,900 emails at 1%; the pool of carriers authorized in the last 60 days with 1-19 trucks is plausibly several thousand, enough for 1,900. UCR and dispatching alternatives are correctly not adopted (UCR: $75 fee unsourced, carrier can file direct for $55, OOIDA warns against vendors, ~80 sales; dispatching: no 2026 price, 240 owner hours).",
+    "findings": [
+     "Volume caveat repeated from my verification of the buyerVolume research: the April 2025 identity-verification drop predates the Sept-Oct 2025 FTR counts, so those ~5,000/month were already measured after it - 'a 2025 count the crackdown roughly halved' is not what the sources show. Neither source gives a 1-19-truck split or a 2026 count; the test's own FMCSA pull will measure it.",
+     "Deliverability: 300 emails over 5 days from a sending domain and mailbox bought on day 3 have no warmup; a low inbox rate would read as low demand. Add a bounce/spam stop so a channel failure is not mistaken for a price failure.",
+     "Settlement: the payment link's first payout may lag 7-14 days on a new processor account; the continue phase should set a last order day (~day 30-35) for cash to settle by day 45.",
+     "$149 retest: state whether passing it can still carry $6,000 (41 sales, ~4,100 emails at 1% in the days left) before running it; otherwise it cannot change the answer.",
+     "Owner hours: ~3 h a package x 19 = ~57 h plus outreach; the contract sets no ceiling, but it should be stated to the owner."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:15:06.492Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Find me a way to make $6,000 within 45 days selling to small trucking companies only (fleets under 20 trucks). I can put up to $1,000 into it.",
+    "terms": "503d1d77eaf6ed41",
+    "openings": {
+     "cop_13a75427d8b5418bae12": "b962f6f9d6c082e2",
+     "cop_33f9d4f7f28d406e8c1c": "e1cf4799aafd92f4",
+     "cop_7a12f0470d2f458b8d6e": "3cb4b65959b48454"
+    }
+   },
+   "at": "2026-11-28T06:22:38.772Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

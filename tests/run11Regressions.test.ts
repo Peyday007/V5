@@ -50,7 +50,11 @@ describe('run 11 (fleet report): a verification call without verdicts or suffici
     expect(() => verdictsArg({ verdicts: [] })).toThrow(/verdicts/);
     expect(() => sufficiencyArg({})).toThrow(/sufficiency/);
     expect(() => sufficiencyArg({ sufficiency: 'maybe' })).toThrow(/sufficiency/);
-    expect(verdictsArg({ verdicts: [{ claimId: 'c' }] })).toEqual([{ claimId: 'c' }]);
+    const full = { claimId: 'c', supportsClaim: true, note: 'the page states it', scopeMatch: { geography: 'MATCH', timeframe: 'MATCH', population: 'MATCH', definitions: 'MATCH' } };
+    expect(verdictsArg({ verdicts: [full] })).toEqual([full]);
+    // Run 15 (fleet-2): reasoning sent as `basis` with no `note` made the gate throw on every attempt; it is refused by name.
+    expect(() => verdictsArg({ verdicts: [{ ...full, note: undefined, basis: 'x' }] })).toThrow(/verdicts\[0\] needs note/);
+    expect(() => verdictsArg({ verdicts: [{ claimId: 'c' }] })).toThrow(/supportsClaim/);
     expect(sufficiencyArg({ sufficiency: 'INSUFFICIENT' })).toBe('INSUFFICIENT');
   });
 });

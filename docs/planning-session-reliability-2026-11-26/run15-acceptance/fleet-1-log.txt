@@ -1,0 +1,15 @@
+a01 wki_fc20ecdcbdde49859872 PLAN_REVIEW REVISE rev_d8888eb264fb_ae55ed: price is competitor listing, not a purchase; stance should be CONDITIONAL
+a05 wki_6d301738b858437ba4d2 PLAN_REVIEW PASS rev_61edda6a8a57_8ab75b: NO_PLAN on SETTLES_IN_TIME (net-45 vs 14 days) is correct
+a06 wki_93e62f59c9cd4ffab513 PLAN_REVIEW REVISE rev_2a92d79f1bd3_55b7aa: price is competitor listing; owner hours unreconciled
+a07 wki_6de18ca919994133ab72 PLAN_REVIEW REVISE rev_fdd44b7d2814_f9d731: price is competitor listing (NOT_A_PURCHASE)
+a02 wki_abaa08575b6d4fdaa0c8 PLAN_REVIEW PASS rev_55e672cf62c1_39793c: CONDITIONAL on PERSON price, threshold carries target
+a03 wki_f5ddad0608bf41e59607 PLAN_REVIEW PASS rev_729547fa4aa6_83c7b7: NO_PLAN on FULFILMENT correct; verifier cost doubtful
+a04 wki_93a70c982f204278b55a PLAN_REVIEW REVISE rev_5535face15c5_f79994: workbook price is competitor listing; stance CONDITIONAL
+a08 wki_3cb748c5cb4240a98849 PLAN_REVIEW PASS rev_9fa932a8adf3_1dceac: NO_PLAN on OWNER_HOURS constraint correct
+a01 wki_2862535af8d24ef3b9a7 PLAN_REVIEW PASS rev_b2b3f6a25436_9b79cf: CONDITIONAL price test carries target
+a06 wki_cee978440a144a9f8035 PLAN_REVIEW REVISE rev_dde05189d038_7a00c4: price rebuttal circular; still competitor listing
+a07 wki_5bc7760c6e13425bb9e4 PLAN_REVIEW REVISE rev_6d9e8b8f24a7_bf716f: price fact is competitor price pages (NOT_A_PURCHASE)
+a04 wki_68a7060387fe47baa588 PLAN_REVIEW PASS rev_03d0155a809f_0cb1ac: CONDITIONAL PO + workbook price test
+a06 wki_cd87971082914e2a8158 PLAN_REVIEW PASS rev_7c14b02b7ff3_83bfae: CONDITIONAL price test carries target
+a07 wki_15ce4702061e4f3f8c7d PLAN_REVIEW PASS rev_6f395b4e2a15_59c64f: CONDITIONAL price test carries target
+a07 wki_c2c1dd6388e54944a4ef PLAN_REVIEW PASS rev_0fc0086a9bd8_7086a2: NO_PLAN on contradicted price (8 evidence) correct
