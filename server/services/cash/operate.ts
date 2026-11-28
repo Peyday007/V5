@@ -95,7 +95,8 @@ import { closeNeed, raiseNeed } from './needs.ts';
 import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
-import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
+import { applyProposal, applyResearchAnswers, proposeTerms, writeEvidenceAnswer } from './answers.ts';
+import { getClaim } from '../../repos/research.ts';
 import {
   CAPACITY_DEFERRALS_PER_PASS,
   capacityDeferralCandidates,
@@ -496,13 +497,55 @@ export function payerQuestionUnanswerable(opportunity: Pick<CashOpportunity, 'ti
   return null;
 }
 
+/**
+ * The payer an opening's own source sentence names outright, or null.
+ *
+ * Review round 1 (F2): the GitHub bounty's accepted claim says "GitHub is the
+ * payer", yet the opening was created with payer null — discovery writes a
+ * payer only from a buyer *population* (`joinRouteEvidence`, which refuses one
+ * organisation), so the one answerable "Payer for …" question waited on a
+ * research slot to rediscover a sentence Brain already held. Only the explicit
+ * forms are read ("X is the payer", "the payer is X"); anything looser is left
+ * to research, because a payer guessed from grammar is a wrong load-bearing
+ * field. Pure.
+ */
+const NAME = String.raw`([A-Z][\w&.'-]*(?:\s+(?:of\s+|the\s+|&\s+)?[A-Z][\w&.'-]*){0,5})`;
+const STATED_PAYER = [
+  new RegExp(String.raw`(?:^|[.;:]\s+)(?:The\s+)?${NAME}\s+is\s+the\s+payer\b`),
+  new RegExp(String.raw`\b[Tt]he\s+payer\s+is\s+${NAME}`),
+];
+const NOT_A_NAME = /^(?:who|what|which|whoever|it|this|that|there|nobody|no one|someone|somebody|unknown)$/i;
+export function statedPayer(text: string | null | undefined): string | null {
+  for (const pattern of STATED_PAYER) {
+    const name = pattern.exec(text ?? '')?.[1]?.trim().replace(/[.'’-]+$/, '');
+    if (name && !NOT_A_NAME.test(name)) return name;
+  }
+  return null;
+}
+
+/**
+ * Write the payer an opening's accepted source claim states outright, through
+ * the same evidence write every research answer uses (`writeEvidenceAnswer`:
+ * card fact with the claim it rests on, event, `mayReplace`). Returns the
+ * opening as it now reads, unchanged when nothing was written.
+ */
+async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpportunity> {
+  if (opportunity.payer !== null || !opportunity.sourceClaimId) return opportunity;
+  const claim = await getClaim(opportunity.sourceClaimId);
+  if (!claim || !claim.sourceUrl) return opportunity;
+  const payer = statedPayer(claim.claim);
+  if (!payer) return opportunity;
+  const written = await writeEvidenceAnswer({ opportunity, field: 'payer', claim: { ...claim, claim: payer }, needId: null });
+  return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
   const openByKey = new Map(open.filter((one) => !!one.requestKey).map((one) => [one.requestKey!, one]));
 
-  for (const opportunity of await listOpportunities({
+  for (const listed of await listOpportunities({
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
@@ -510,7 +553,14 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     await new Promise<void>((resolve) => setImmediate(resolve));
     // A second record of an opening is researched through its survivor, never
     // again on its own (`duplicates.ts`).
-    if (opportunity.duplicateOfId) continue;
+    if (listed.duplicateOfId) continue;
+    /*
+     * A payer the opening's own accepted source states outright is written
+     * before any question is weighed (`fillStatedPayer`), so the card reads it
+     * and no "Payer for …" need is raised to rediscover it — and one already
+     * open is settled by the filled-gap pass below, as any filled field is.
+     */
+    const opportunity = await fillStatedPayer(listed);
     /*
      * Only for something Brain has a reason to spend on.
      *

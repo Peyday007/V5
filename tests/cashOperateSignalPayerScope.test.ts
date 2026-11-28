@@ -14,13 +14,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
-import { listNeeds } from '../server/repos/cashPortfolio.ts';
+import { getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
+import { getDb } from '../server/db/database.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
+import { cardFact } from '../server/repos/cashCardFacts.ts';
 import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
 import { capture } from '../server/services/cash/opportunities.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
 import { questionKey } from '../server/services/cash/conditions.ts';
 import { parseBlockerKey } from '../server/domain/types.ts';
-import { payerQuestionUnanswerable, reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { payerQuestionUnanswerable, reconcileDiscoverableGaps, statedPayer } from '../server/services/cash/operate.ts';
 import { QUESTION_SKIPPED_EVENT } from '../server/services/cash/screenMetrics.ts';
 
 const ADOBE =
@@ -31,6 +35,10 @@ const COPART =
   "Preferred Auto Brokers (PAB), whose registration terms are published on Copart's own site, charges buyers who register through it a $195.00 annual registration fee";
 const STUBHUB =
   'As of April 9, 2026 at 4pm PT, StubHub listed Coachella 2026 Weekend 1 resale tickets at $2,905 for general admission and $5,061 for VIP — a specific listing';
+const BUYER_SPEND_FACTS_FOR_PAYER = [
+  'Acme Dental pays $4,000 per month to an outside agency for appointment-reminder calls',
+  'The City of Austin budgets $12,000 per month for translation services',
+];
 const GITHUB =
   "GitHub is the payer; its bug bounty is run through HackerOne (hackerone.com/github). The program's own site says 'If you have found a vulnerability, submit it'";
 
@@ -135,5 +143,81 @@ describe('the signal gap pass', () => {
     expect(withdrawn[0]!.resolution).toContain('Nothing was established');
     expect(await listNeeds({ projectId, states: ['RESOLVED'] })).toEqual([]);
     expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === key)).toBe(false);
+  });
+});
+
+/** Give an opening the accepted research claim it was harvested from, as discovery does. */
+async function harvestedFrom(opportunityId: string, text: string): Promise<string> {
+  const layer = await getDb().all<{ id: string }>('SELECT id FROM layers WHERE project_id = ? LIMIT 1', [projectId]);
+  const run = await createRun({ projectId, layerId: layer[0]!.id, runType: 'FOUNDATION', provider: 'WORKER' });
+  const orchestration = await createOrchestration({ projectId, layerId: layer[0]!.id, runId: run.id, title: 'payer fixture', assignment: 'payer', provider: 'WORKER' });
+  const claimId = `clm_payer_${Math.random().toString(36).slice(2, 10)}`;
+  await getDb().run(
+    `INSERT INTO research_claims
+       (id, orchestration_id, fragment_id, pass_id, pass_key, claim, source_url, source_title,
+        source_publisher, source_date, evidence_excerpt, evidence_locator, evidence_lane,
+        retrieved_at, confidence, contradiction_state, contradiction_note, validation_state,
+        validation_detail, sourced, derived, derived_from, accepted, content_hash, created_at)
+     VALUES (?, ?, NULL, NULL, 'RESEARCH', ?, ?, NULL, NULL, NULL, NULL, NULL, 'lane-1',
+             ?, 0.9, 'UNCHALLENGED', NULL, 'VALID', NULL, 1, 0, '[]', 1, ?, ?)`,
+    [claimId, orchestration.id, text, 'https://hackerone.com/github', '2026-11-01T00:00:00.000Z', `hash-${claimId}`, '2026-11-01T00:00:00.000Z'] as never[],
+  );
+  await getDb().run('UPDATE cash_opportunities SET source_claim_id = ? WHERE id = ?', [claimId, opportunityId] as never[]);
+  return claimId;
+}
+
+describe('statedPayer', () => {
+  it('reads only a payer the sentence names outright', () => {
+    expect(statedPayer(GITHUB)).toBe('GitHub');
+    expect(statedPayer('Bounties are triaged weekly. The payer is Shopify Inc.')).toBe('Shopify Inc');
+    expect(statedPayer('Who is the payer is not stated on the page.')).toBeNull();
+    for (const title of [ADOBE, TCG, COPART, STUBHUB, ...BUYER_SPEND_FACTS_FOR_PAYER]) expect(statedPayer(title)).toBeNull();
+  });
+});
+
+describe('a payer the source states', () => {
+  it('is written onto the card from the accepted claim, and no payer question is raised', async () => {
+    const github = await signal(GITHUB);
+    const claimId = await harvestedFrom(github.id, GITHUB);
+
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    expect(gaps.filter((one) => one.opportunityId === github.id && one.field === 'payer')).toEqual([]);
+    expect((await getOpportunity(github.id))!.payer).toBe('GitHub');
+    expect(await cardFact(github.id, 'payer')).toMatchObject({ kind: 'EVIDENCE', value: 'GitHub', claimId });
+    expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === questionKey(github.id, 'payer'))).toBe(false);
+  });
+
+  it('settles a payer question already open on it as RESOLVED, because the payer was established', async () => {
+    const github = await signal(GITHUB);
+    const key = questionKey(github.id, 'payer');
+    expect(
+      (
+        await raiseNeed({
+          projectId,
+          opportunityId: github.id,
+          actorRef: 'BRAIN',
+          blockedAction: `Payer for "${github.title}"`,
+          whyItMatters: 'Raised before the change.',
+          recommendedPath: 'Name the person or role who can approve payment.',
+          setupEffort: 'One bounded look.',
+          nextStep: 'Name the person or role who can approve payment.',
+          completionCondition: 'The payer is recorded on this card.',
+          blocksState: 'EXECUTING',
+          requestKey: key,
+          blockerKey: parseBlockerKey('FIELD:payer'),
+        })
+      ).ok,
+    ).toBe(true);
+    await harvestedFrom(github.id, GITHUB);
+
+    await reconcileDiscoverableGaps(projectId);
+    expect((await listNeeds({ projectId, states: ['RESOLVED'] })).map((one) => one.requestKey)).toEqual([key]);
+    expect(await listNeeds({ projectId, states: ['WITHDRAWN'] })).toEqual([]);
+  });
+
+  it('is never read from an opening with no accepted source claim', async () => {
+    const github = await signal(GITHUB);
+    await reconcileDiscoverableGaps(projectId);
+    expect((await getOpportunity(github.id))!.payer).toBeNull();
   });
 });
