@@ -1,0 +1,770 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_5eb16dd0f2e9427da49c",
+   "words": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 6000000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$60,000 of settled cash received in the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "aa45f1f69912ed995a1ac1ac"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_5eb16dd0f2e9427da49c",
+    "contractDigest": "aa45f1f69912ed995a1ac1ac",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the counted PI-agency market cannot carry $60,000",
+     "opportunityIds": [],
+     "why": "The only opening sells one $150 template pack per agency to a market research counted whole: 310 licensed agencies, one pack each. Even if every agency bought, that is 310 x $150 = $46,500, below the $60,000 target; at the measured 33/300 conversion it is about 34 sales, roughly $5,100."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the pack to all 310 agencies",
+      "why": "Caps at $46,500 even at 100% conversion; about $5,100 at the measured 11% rate."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Search for further openings outside the counted PI-agency market (other buyer populations or a repeat product) that could close the gap",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-volume",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable agencies",
+      "status": "EVIDENCED",
+      "value": 310,
+      "unit": "buyers",
+      "sources": [
+       "src-volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per pack",
+      "status": "EVIDENCED",
+      "value": 15000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.11,
+      "unit": "agreements per contact",
+      "sources": [
+       "src-conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue at 100% conversion",
+      "status": "EVIDENCED",
+      "value": 4650000,
+      "unit": "cents",
+      "sources": [
+       "src-volume",
+       "src-price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-volume",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state licensing board's public licensee search lists 310 licensed PI agencies, each needing one pack.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     },
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#price",
+      "dated": "2026-11",
+      "claim": "Comparable investigator case-file template packs sell for $150.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     },
+     {
+      "id": "src-conv",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "33 agreements from 300 contacts.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: the whole counted market (310 agencies x one $150 pack) is worth at most $46,500, below the $60,000 target, so no number of contacts reaches it.",
+     "resolution": "Lower the target to at most $46,500 (realistically about $5,100 at the measured 11% conversion), or find additional openings in uncounted markets; Brain keeps searching for them.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_451e545835074dad9db6",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_451e545835074dad9db6",
+      "why": "310 agencies x $150 = $46,500 maximum, below $60,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $46,500 (310 agencies x $150); about $5,100 is what the measured 33/300 conversion supports in 30 days.",
+      "basis": [
+       {
+        "opportunityId": "cop_451e545835074dad9db6",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_451e545835074dad9db6",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_7ff27a3b6dca_9be8a9",
+    "digest": "7ff27a3b6dca59902b16fec2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e2d7165069f14b3abbf0/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:35.964Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_5eb16dd0f2e9427da49c",
+   "contractDigest": "aa45f1f69912ed995a1ac1ac",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the counted PI-agency market cannot carry $60,000",
+    "opportunityIds": [],
+    "why": "The only opening sells one $150 template pack per agency to a market research counted whole: 310 licensed agencies, one pack each. Even if every agency bought, that is 310 x $150 = $46,500, below the $60,000 target; at the measured 33/300 conversion it is about 34 sales, roughly $5,100."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the pack to all 310 agencies",
+     "why": "Caps at $46,500 even at 100% conversion; about $5,100 at the measured 11% rate."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Search for further openings outside the counted PI-agency market (other buyer populations or a repeat product) that could close the gap",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src-volume",
+      "src-price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable agencies",
+     "status": "EVIDENCED",
+     "value": 310,
+     "unit": "buyers",
+     "sources": [
+      "src-volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per pack",
+     "status": "EVIDENCED",
+     "value": 15000,
+     "unit": "cents",
+     "sources": [
+      "src-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.11,
+     "unit": "agreements per contact",
+     "sources": [
+      "src-conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "maximum revenue at 100% conversion",
+     "status": "EVIDENCED",
+     "value": 4650000,
+     "unit": "cents",
+     "sources": [
+      "src-volume",
+      "src-price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src-volume",
+     "url": "https://brain.local/card/cop_451e545835074dad9db6#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The state licensing board's public licensee search lists 310 licensed PI agencies, each needing one pack.",
+     "population": "Licensed PI agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_451e545835074dad9db6"
+    },
+    {
+     "id": "src-price",
+     "url": "https://brain.local/card/cop_451e545835074dad9db6#price",
+     "dated": "2026-11",
+     "claim": "Comparable investigator case-file template packs sell for $150.",
+     "population": "Licensed PI agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_451e545835074dad9db6"
+    },
+    {
+     "id": "src-conv",
+     "url": "https://brain.local/card/cop_451e545835074dad9db6#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "33 agreements from 300 contacts.",
+     "population": "Licensed PI agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_451e545835074dad9db6"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: the whole counted market (310 agencies x one $150 pack) is worth at most $46,500, below the $60,000 target, so no number of contacts reaches it.",
+    "resolution": "Lower the target to at most $46,500 (realistically about $5,100 at the measured 11% conversion), or find additional openings in uncounted markets; Brain keeps searching for them.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_451e545835074dad9db6",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_451e545835074dad9db6",
+     "why": "310 agencies x $150 = $46,500 maximum, below $60,000."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $46,500 (310 agencies x $150); about $5,100 is what the measured 33/300 conversion supports in 30 days.",
+     "basis": [
+      {
+       "opportunityId": "cop_451e545835074dad9db6",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_451e545835074dad9db6",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_7ff27a3b6dca_9be8a9",
+   "digest": "7ff27a3b6dca59902b16fec2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e2d7165069f14b3abbf0/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:38:35.964Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_7ff27a3b6dca_9be8a9",
+   "digest": "7ff27a3b6dca59902b16fec2",
+   "contractDigest": "aa45f1f69912ed995a1ac1ac",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $46,500, so they cannot reach the $60,000 still needed. To make it supportable, target: lower the target to about $46,500, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_451e545835074dad9db6"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_451e545835074dad9db6",
+      "title": "Skip-trace case-file and chain-of-custody template pack for private investigators",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 30000,
+      "potentialReach": 30000,
+      "card": {
+       "payer": "Licensed private investigators who run their own agencies",
+       "reachableChannel": "Published agency emails in the state licensing board's public licensee search",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:56.727Z",
+       "offerScope": "One template pack per agency; delivered at once; paid by card at checkout.",
+       "priceCents": 15000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "private investigation agencies",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published agency emails in the state licensing board's public licensee search"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 150 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 33 accepted of 300 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "311 deal(s) needed but only 310 in the window (310 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 2, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state licensing board's public licensee search lists 310 licensed private-investigator agencies, each with a published email; each needs one pack.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One template pack per agency; delivered at once; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "33 agreements from 300 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$2",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Licensed private investigators who run their own agencies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Comparable investigator case-file template packs sell for $150 on the state investigators' association store (listing prices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 6000000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:36:45.378Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_7ff27a3b6dca_9be8a9",
+    "revisionDigest": "7ff27a3b6dca59902b16fec2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e2d7165069f14b3abbf0/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ca0d13619f414002af5b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and the decisive gap is a genuine constraint, not missing evidence. Recomputed: the market is counted whole from the state licensing board's licensee search (310 agencies, one pack each, no repeat purchase stated); 310 x $150 = $46,500 < $60,000 even at 100% conversion, so ceil(60000/150) = 400 deals would be needed against 310 buyers (Brain: MARKET_VOLUME false). At the measured 33/300 (11%) conversion the market yields about 34 sales = ~$5,100. Every other link is established (price, conversion on this offer's own sales, Brain-proved spreadsheet fulfilment, $2 cost, $0 exposure, 3-day settlement in a 30-day window), so volume alone decides it. decisiveLinks [MARKET_VOLUME] and the TARGET constraint with basis buyerVolume + price match Brain's own INFEASIBLE AS STATED verdict, and the resolution correctly says the conclusion covers only the counted market and further openings are still searched.",
+    "findings": [
+     "NOTE: The price source text reads 'comparable investigator case-file template packs sell for $150', which on its own is a benchmark of what other sellers charge; it is acceptable here only because the 33/300 acceptances were measured on this offer at its $150 card price. The cap would move only with evidence that these agencies pay more than $194 per pack, of which there is none.",
+     "NOTE: 300 of the 310 agencies have already been contacted, so the realistic remaining reach is close to the ~$5,100 the revision states, not $46,500; the 'lower the target to $46,500' suggestion is a ceiling, not an expectation."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:00.986Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_7ff27a3b6dca_9be8a9",
+   "digest": "7ff27a3b6dca59902b16fec2",
+   "contractDigest": "aa45f1f69912ed995a1ac1ac",
+   "plan": {
+    "goalId": "wst_5eb16dd0f2e9427da49c",
+    "contractDigest": "aa45f1f69912ed995a1ac1ac",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the counted PI-agency market cannot carry $60,000",
+     "opportunityIds": [],
+     "why": "The only opening sells one $150 template pack per agency to a market research counted whole: 310 licensed agencies, one pack each. Even if every agency bought, that is 310 x $150 = $46,500, below the $60,000 target; at the measured 33/300 conversion it is about 34 sales, roughly $5,100."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the pack to all 310 agencies",
+      "why": "Caps at $46,500 even at 100% conversion; about $5,100 at the measured 11% rate."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Search for further openings outside the counted PI-agency market (other buyer populations or a repeat product) that could close the gap",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-volume",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable agencies",
+      "status": "EVIDENCED",
+      "value": 310,
+      "unit": "buyers",
+      "sources": [
+       "src-volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per pack",
+      "status": "EVIDENCED",
+      "value": 15000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.11,
+      "unit": "agreements per contact",
+      "sources": [
+       "src-conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue at 100% conversion",
+      "status": "EVIDENCED",
+      "value": 4650000,
+      "unit": "cents",
+      "sources": [
+       "src-volume",
+       "src-price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-volume",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state licensing board's public licensee search lists 310 licensed PI agencies, each needing one pack.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     },
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#price",
+      "dated": "2026-11",
+      "claim": "Comparable investigator case-file template packs sell for $150.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     },
+     {
+      "id": "src-conv",
+      "url": "https://brain.local/card/cop_451e545835074dad9db6#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "33 agreements from 300 contacts.",
+      "population": "Licensed PI agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_451e545835074dad9db6"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: the whole counted market (310 agencies x one $150 pack) is worth at most $46,500, below the $60,000 target, so no number of contacts reaches it.",
+     "resolution": "Lower the target to at most $46,500 (realistically about $5,100 at the measured 11% conversion), or find additional openings in uncounted markets; Brain keeps searching for them.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_451e545835074dad9db6",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_451e545835074dad9db6",
+      "why": "310 agencies x $150 = $46,500 maximum, below $60,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $46,500 (310 agencies x $150); about $5,100 is what the measured 33/300 conversion supports in 30 days.",
+      "basis": [
+       {
+        "opportunityId": "cop_451e545835074dad9db6",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_451e545835074dad9db6",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_7ff27a3b6dca_9be8a9",
+    "digest": "7ff27a3b6dca59902b16fec2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e2d7165069f14b3abbf0/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:35.964Z"
+   },
+   "review": {
+    "revisionId": "rev_7ff27a3b6dca_9be8a9",
+    "revisionDigest": "7ff27a3b6dca59902b16fec2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e2d7165069f14b3abbf0/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ca0d13619f414002af5b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and the decisive gap is a genuine constraint, not missing evidence. Recomputed: the market is counted whole from the state licensing board's licensee search (310 agencies, one pack each, no repeat purchase stated); 310 x $150 = $46,500 < $60,000 even at 100% conversion, so ceil(60000/150) = 400 deals would be needed against 310 buyers (Brain: MARKET_VOLUME false). At the measured 33/300 (11%) conversion the market yields about 34 sales = ~$5,100. Every other link is established (price, conversion on this offer's own sales, Brain-proved spreadsheet fulfilment, $2 cost, $0 exposure, 3-day settlement in a 30-day window), so volume alone decides it. decisiveLinks [MARKET_VOLUME] and the TARGET constraint with basis buyerVolume + price match Brain's own INFEASIBLE AS STATED verdict, and the resolution correctly says the conclusion covers only the counted market and further openings are still searched.",
+    "findings": [
+     "NOTE: The price source text reads 'comparable investigator case-file template packs sell for $150', which on its own is a benchmark of what other sellers charge; it is acceptable here only because the 33/300 acceptances were measured on this offer at its $150 card price. The cap would move only with evidence that these agencies pay more than $194 per pack, of which there is none.",
+     "NOTE: 300 of the 310 agencies have already been contacted, so the realistic remaining reach is close to the ~$5,100 the revision states, not $46,500; the 'lower the target to $46,500' suggestion is a ceiling, not an expectation."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:00.986Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "791268f826e394ca",
+    "openings": {
+     "cop_451e545835074dad9db6": "b439d0e16975f5c2"
+    }
+   },
+   "at": "2026-11-28T01:41:43.993Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

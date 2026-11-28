@@ -1,0 +1,1137 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_fdf408a03d764e7eb5d6",
+   "words": "Collect $3,000 of settled cash within 21 days with no more than 3 hours a week of my own time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "$3,000 of settled cash received in the owner's account within 21 days",
+    "ownerHoursPerWeek": 3,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f676a9627972d9ca3e46304e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_fdf408a03d764e7eb5d6",
+    "contractDigest": "f676a9627972d9ca3e46304e",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 3 owner hours a week: the six signed audits need 36 owner hours",
+     "opportunityIds": [],
+     "why": "Six boutique-hotel GMs signed orders at $500 per mystery-guest audit, exactly $3,000, but the record says the owner performs each audit personally at 6 owner hours each: 36 hours, against the 9 the goal allows (3 h/week x 3 weeks). Within 9 hours the owner can perform one audit ($500). No other fulfiller is named on the record."
+    },
+    "alternatives": [
+     {
+      "title": "Perform as many audits as the hours allow",
+      "why": "One audit (6 h) fits in 9 hours: $500, far short of $3,000."
+     },
+     {
+      "title": "Subcontract the audits",
+      "why": "No subcontractor or price is on the record; the orders specify the owner performs them."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the owner will allow 36 hours (12 h/week) for the six signed audits, or find a fulfiller the hotels would accept",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-hours",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 50000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours per audit",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours needed",
+      "status": "EVIDENCED",
+      "value": 36,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours allowed",
+      "status": "EVIDENCED",
+      "value": 9,
+      "unit": "hours",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#price",
+      "dated": "2026-11-22",
+      "claim": "Six boutique hotel GMs signed written orders at $500 per mystery-guest audit.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     },
+     {
+      "id": "src-hours",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Each audit is performed by the owner, 6 owner hours each.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the six signed $500 audits are owner-performed at 6 hours each (36 hours), four times the 9 hours the goal allows; within the limit only one audit ($500) can be delivered.",
+     "resolution": "Raise the owner-hours limit to 36 hours over the 21 days (12 h/week) to deliver all six signed audits for $3,000, or lower the target to $500 (one audit) within 3 h/week.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "why": "Needs 36 owner hours for the $3,000; only 9 allowed."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow 36 owner hours over 21 days (12 h/week) to perform all six signed audits; at 3 h/week only one audit ($500) fits.",
+      "basis": [
+       {
+        "opportunityId": "cop_a923786f277d4ab5b819",
+        "field": "captureMechanism"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_99d7b20198de_298f37",
+    "digest": "99d7b20198de519de77411bc",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:52.616Z"
+   },
+   {
+    "goalId": "wst_fdf408a03d764e7eb5d6",
+    "contractDigest": "f676a9627972d9ca3e46304e",
+    "parentRevisionId": "rev_99d7b20198de_298f37",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 3 owner hours a week: the six signed audits need 36 owner hours",
+     "opportunityIds": [],
+     "why": "Six boutique-hotel GMs signed orders at $500 per mystery-guest audit, exactly $3,000, but the record says the owner performs each audit personally at 6 owner hours each: 36 hours, against the 9 the goal allows (3 h/week x 3 weeks). Within 9 hours the owner can perform one audit ($500). No other fulfiller is named on the record."
+    },
+    "alternatives": [
+     {
+      "title": "Perform as many audits as the hours allow",
+      "why": "One audit (6 h) fits in 9 hours: $500, far short of $3,000."
+     },
+     {
+      "title": "Subcontract the audits",
+      "why": "No subcontractor or price is on the record; the orders specify the owner performs them."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the owner will allow 36 hours (12 h/week) for the six signed audits, or find a fulfiller the hotels would accept",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-hours",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 50000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours per audit",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours needed",
+      "status": "EVIDENCED",
+      "value": 36,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#price",
+      "dated": "2026-11-22",
+      "claim": "Six boutique hotel GMs signed written orders at $500 per mystery-guest audit.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     },
+     {
+      "id": "src-hours",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Each audit is performed by the owner, 6 owner hours each.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the six signed $500 audits are owner-performed at 6 hours each (36 hours), four times the 9 hours the goal allows; within the limit only one audit ($500) can be delivered.",
+     "resolution": "Raise the owner-hours limit to 36 hours over the 21 days (12 h/week) to deliver all six signed audits for $3,000, or lower the target to $500 (one audit) within 3 h/week.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "why": "Needs 36 owner hours for the $3,000; only 9 allowed."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow 36 owner hours over 21 days (12 h/week) to perform all six signed audits; at 3 h/week only one audit ($500) fits.",
+      "basis": [
+       {
+        "opportunityId": "cop_a923786f277d4ab5b819",
+        "field": "captureMechanism"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_8774b500b36a_ca87a2",
+    "digest": "8774b500b36a8f1e12cdd0b3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:57.400Z"
+   },
+   {
+    "goalId": "wst_fdf408a03d764e7eb5d6",
+    "contractDigest": "f676a9627972d9ca3e46304e",
+    "parentRevisionId": "rev_8774b500b36a_ca87a2",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 3 owner hours a week: the six signed audits need 36 owner hours",
+     "opportunityIds": [],
+     "why": "Six boutique-hotel GMs signed orders at $500 per mystery-guest audit, exactly $3,000, but the record says the owner performs each audit personally at 6 owner hours each: 36 hours, against a limit of 3 hours in any week (9 over the 3 weeks). A check-in-to-checkout audit is one 6-hour stay that cannot be split across weeks, so not even one audit fits inside a 3-hour week: the reachable amount within the limit is $0. No other fulfiller is named on the record."
+    },
+    "alternatives": [
+     {
+      "title": "Perform as many audits as the hours allow",
+      "why": "Each audit is a single 6-hour stay, twice the 3-hour weekly limit, so none fits: $0."
+     },
+     {
+      "title": "Subcontract the audits",
+      "why": "No subcontractor or price is on the record; the orders specify the owner performs them."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the owner will allow 36 hours inside the first 14 days (about 18 h/week) so all six reports are done by day 14 and paid by day 21, or find a fulfiller the hotels would accept",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-hours",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 50000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours per audit",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours needed",
+      "status": "EVIDENCED",
+      "value": 36,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#price",
+      "dated": "2026-11-22",
+      "claim": "Six boutique hotel GMs signed written orders at $500 per mystery-guest audit.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     },
+     {
+      "id": "src-hours",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Each audit is performed by the owner, 6 owner hours each.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the six signed $500 audits are owner-performed at 6 hours each (36 hours), and each is one 6-hour stay, twice the 3-hour weekly limit, so within the limit no audit can be delivered ($0).",
+     "resolution": "Allow 36 owner hours inside the first 14 days (about 18 h/week for two weeks, each week at least 6 h per audit scheduled) so all six reports are done by day 14; at the card's 7 days to usable cash (paid within 5 days of each report) the $3,000 then settles by day 21. 12 h/week is not enough: the last two audits would finish in week 3 and be paid after day 21. Alternatively the hotels would have to accept a fulfiller other than the owner, which nothing on the record offers.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Remedy 'allow 12 h/week' does not settle $3,000 inside 21 days",
+      "resolution": "Accepted. The relaxation is now 36 hours inside the first 14 days (~18 h/week), so all six reports are done by day 14 and, at the card's 7 days to usable cash, paid by day 21."
+     },
+     {
+      "finding": "MAJOR: The weekly ceiling is 3 h; a 6-hour single-stay audit cannot be done in any one week within it",
+      "resolution": "Accepted. The offerScope makes each audit one check-in-to-checkout stay of 6 owner hours; within 3 h/week no audit fits, so the reachable amount is $0, and the $500 alternative is removed."
+     },
+     {
+      "finding": "NOTE: decisiveLinks is empty, which is consistent",
+      "resolution": "Kept: no chain link is missing; OWNER_HOURS is the binding constraint."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "why": "Needs 36 owner hours (6-hour stays) for the $3,000; the limit is 3 hours a week."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow 36 owner hours inside the first 14 days (about 18 h/week) so all six signed audits are reported by day 14 and paid by day 21; at 3 h/week no 6-hour audit fits and the reachable amount is $0.",
+      "basis": [
+       {
+        "opportunityId": "cop_a923786f277d4ab5b819",
+        "field": "captureMechanism"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_6472d3d5c1db_339d46",
+    "digest": "6472d3d5c1dbf6929a0898db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:35.912Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_fdf408a03d764e7eb5d6",
+   "contractDigest": "f676a9627972d9ca3e46304e",
+   "parentRevisionId": "rev_8774b500b36a_ca87a2",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan within 3 owner hours a week: the six signed audits need 36 owner hours",
+    "opportunityIds": [],
+    "why": "Six boutique-hotel GMs signed orders at $500 per mystery-guest audit, exactly $3,000, but the record says the owner performs each audit personally at 6 owner hours each: 36 hours, against a limit of 3 hours in any week (9 over the 3 weeks). A check-in-to-checkout audit is one 6-hour stay that cannot be split across weeks, so not even one audit fits inside a 3-hour week: the reachable amount within the limit is $0. No other fulfiller is named on the record."
+   },
+   "alternatives": [
+    {
+     "title": "Perform as many audits as the hours allow",
+     "why": "Each audit is a single 6-hour stay, twice the 3-hour weekly limit, so none fits: $0."
+    },
+    {
+     "title": "Subcontract the audits",
+     "why": "No subcontractor or price is on the record; the orders specify the owner performs them."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask whether the owner will allow 36 hours inside the first 14 days (about 18 h/week) so all six reports are done by day 14 and paid by day 21, or find a fulfiller the hotels would accept",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src-hours",
+      "src-price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "deals",
+     "sources": [
+      "src-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per audit",
+     "status": "EVIDENCED",
+     "value": 50000,
+     "unit": "cents",
+     "sources": [
+      "src-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours per audit",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "hours",
+     "sources": [
+      "src-hours"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours needed",
+     "status": "EVIDENCED",
+     "value": 36,
+     "unit": "hours",
+     "sources": [
+      "src-hours"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src-price",
+     "url": "https://brain.local/card/cop_a923786f277d4ab5b819#price",
+     "dated": "2026-11-22",
+     "claim": "Six boutique hotel GMs signed written orders at $500 per mystery-guest audit.",
+     "population": "Boutique hotel general managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a923786f277d4ab5b819"
+    },
+    {
+     "id": "src-hours",
+     "url": "https://brain.local/card/cop_a923786f277d4ab5b819#captureMechanism",
+     "dated": "2026-11-25",
+     "claim": "Each audit is performed by the owner, 6 owner hours each.",
+     "population": "Boutique hotel general managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a923786f277d4ab5b819"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: the six signed $500 audits are owner-performed at 6 hours each (36 hours), and each is one 6-hour stay, twice the 3-hour weekly limit, so within the limit no audit can be delivered ($0).",
+    "resolution": "Allow 36 owner hours inside the first 14 days (about 18 h/week for two weeks, each week at least 6 h per audit scheduled) so all six reports are done by day 14; at the card's 7 days to usable cash (paid within 5 days of each report) the $3,000 then settles by day 21. 12 h/week is not enough: the last two audits would finish in week 3 and be paid after day 21. Alternatively the hotels would have to accept a fulfiller other than the owner, which nothing on the record offers.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MAJOR: Remedy 'allow 12 h/week' does not settle $3,000 inside 21 days",
+     "resolution": "Accepted. The relaxation is now 36 hours inside the first 14 days (~18 h/week), so all six reports are done by day 14 and, at the card's 7 days to usable cash, paid by day 21."
+    },
+    {
+     "finding": "MAJOR: The weekly ceiling is 3 h; a 6-hour single-stay audit cannot be done in any one week within it",
+     "resolution": "Accepted. The offerScope makes each audit one check-in-to-checkout stay of 6 owner hours; within 3 h/week no audit fits, so the reachable amount is $0, and the $500 alternative is removed."
+    },
+    {
+     "finding": "NOTE: decisiveLinks is empty, which is consistent",
+     "resolution": "Kept: no chain link is missing; OWNER_HOURS is the binding constraint."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_a923786f277d4ab5b819",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_a923786f277d4ab5b819",
+     "why": "Needs 36 owner hours (6-hour stays) for the $3,000; the limit is 3 hours a week."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Allow 36 owner hours inside the first 14 days (about 18 h/week) so all six signed audits are reported by day 14 and paid by day 21; at 3 h/week no 6-hour audit fits and the reachable amount is $0.",
+     "basis": [
+      {
+       "opportunityId": "cop_a923786f277d4ab5b819",
+       "field": "captureMechanism"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_6472d3d5c1db_339d46",
+   "digest": "6472d3d5c1dbf6929a0898db",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_5de3e229ce0b461abdee/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:44:35.912Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_6472d3d5c1db_339d46",
+   "digest": "6472d3d5c1dbf6929a0898db",
+   "contractDigest": "f676a9627972d9ca3e46304e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: the agreed deals need 36 owner hours, more than the 9 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1971× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 25–43 (swept by the plan's simulation: an assumption, not established), after the 21 days left, so it brings no cash inside the goal's window.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_a923786f277d4ab5b819"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 3000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "title": "Owner-performed mystery-guest service audits for boutique hotels",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Boutique hotel general managers",
+       "reachableChannel": "The six general managers who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:34:01.215Z",
+       "offerScope": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 6,
+       "requiredCapabilities": [],
+       "industry": "boutique hotels",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 50000,
+        "currency": "USD",
+        "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six general managers who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by The owner, personally (a person says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Boutique hotel general managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six boutique hotel general managers signed written orders at $500 per mystery-guest audit (signed orders, 2026-11-22).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 21,
+     "hoursCeiling": 9,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 3
+    },
+    "at": "2026-11-28T01:36:45.430Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_8774b500b36a_ca87a2",
+    "revisionDigest": "8774b500b36a8f1e12cdd0b3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bdab0dcb5d7446d4a34a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The stance (NO_PLAN on an OWNER_HOURS constraint) is right: six WRITTEN_ACCEPTANCE orders at $500 = exactly $3,000, every chain link established, but the card's offerScope and fulfillmentOwner make the owner the performer at 6 hours per audit, so 6 x 6 = 36 owner hours against a 3 h/week limit. But the two remedies the owner would act on are both wrong on the arithmetic. (1) 'Raise to 36 hours over 21 days (12 h/week) to deliver all six for $3,000': at 12 h/week the owner does 2 audits a week, so audits 5-6 finish in week 3 (days 15-21) and are paid within 5 days of the report, i.e. up to day 26, outside the 21-day window (Brain's own sweep puts usable cash at day 25-43). Carrying $3,000 inside the window needs all six reports by about day 16, i.e. ~36 hours in the first 16 days (~16-18 h/week), or the six hotels agreeing to faster payment. (2) 'Lower the target to $500 (one audit) within 3 h/week' and 'one audit (6 h) fits in 9 hours': the limit is weekly, and a check-in-to-checkout audit is one 6-hour stay that cannot be split across weeks, so a single audit already exceeds 3 h in its week; within the limit as written no audit fits and the reachable amount is $0, not $500.",
+    "findings": [
+     "MAJOR: Remedy 'allow 12 h/week' does not settle $3,000 inside 21 days: last two audits end days 15-21, paid up to 5 days later (day 26). State the hours and schedule that actually settle by day 21 (all six reports by ~day 16) or say faster payment terms are needed.",
+     "MAJOR: The weekly ceiling is 3 h; a 6-hour single-stay audit cannot be done in any one week within it, so 'one audit, $500, within 3 h/week' and 'one audit fits in 9 hours' treat a weekly limit as a 21-day pool. Within the limit the reachable amount is $0.",
+     "NOTE: decisiveLinks is empty, which is consistent: no link is missing, the binding limit is OWNER_HOURS (a true constraint, with basis captureMechanism)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:34.805Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_6472d3d5c1db_339d46",
+    "revisionDigest": "6472d3d5c1dbf6929a0898db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bdab0dcb5d7446d4a34a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_8774b500b36a_ca87a2 are fixed. NO_PLAN on an OWNER_HOURS constraint is right: 6 WRITTEN_ACCEPTANCE orders x $500 = $3,000, all chain links established (Brain: none missing), but each audit is one check-in-to-checkout stay of 6 owner hours (card offerScope/fulfillmentOwner: the owner personally), twice the 3 h weekly limit, so within the limit $0 is reachable. Recomputed remedy: 36 hours finished by day 14 = 18 h/week for two weeks; last report day 14 + the card's 7 days to usable cash (paid within 5 days of the report) = day 21, inside the 21-day window; 12 h/week correctly rejected (audits 5-6 in week 3, paid after day 21). decisiveLinks empty is consistent with a pure constraint.",
+    "findings": [
+     "NOTE: The day-14 schedule lands exactly on day 21, with no slack; any audit slipping a day, or a hotel paying on day 5 plus bank settlement beyond the card's 7 days, misses the window. Finishing by ~day 12 (about 21 h/week) would leave margin."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:45:30.698Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_6472d3d5c1db_339d46",
+   "digest": "6472d3d5c1dbf6929a0898db",
+   "contractDigest": "f676a9627972d9ca3e46304e",
+   "plan": {
+    "goalId": "wst_fdf408a03d764e7eb5d6",
+    "contractDigest": "f676a9627972d9ca3e46304e",
+    "parentRevisionId": "rev_8774b500b36a_ca87a2",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 3 owner hours a week: the six signed audits need 36 owner hours",
+     "opportunityIds": [],
+     "why": "Six boutique-hotel GMs signed orders at $500 per mystery-guest audit, exactly $3,000, but the record says the owner performs each audit personally at 6 owner hours each: 36 hours, against a limit of 3 hours in any week (9 over the 3 weeks). A check-in-to-checkout audit is one 6-hour stay that cannot be split across weeks, so not even one audit fits inside a 3-hour week: the reachable amount within the limit is $0. No other fulfiller is named on the record."
+    },
+    "alternatives": [
+     {
+      "title": "Perform as many audits as the hours allow",
+      "why": "Each audit is a single 6-hour stay, twice the 3-hour weekly limit, so none fits: $0."
+     },
+     {
+      "title": "Subcontract the audits",
+      "why": "No subcontractor or price is on the record; the orders specify the owner performs them."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the owner will allow 36 hours inside the first 14 days (about 18 h/week) so all six reports are done by day 14 and paid by day 21, or find a fulfiller the hotels would accept",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-hours",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 50000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours per audit",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours needed",
+      "status": "EVIDENCED",
+      "value": 36,
+      "unit": "hours",
+      "sources": [
+       "src-hours"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#price",
+      "dated": "2026-11-22",
+      "claim": "Six boutique hotel GMs signed written orders at $500 per mystery-guest audit.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     },
+     {
+      "id": "src-hours",
+      "url": "https://brain.local/card/cop_a923786f277d4ab5b819#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Each audit is performed by the owner, 6 owner hours each.",
+      "population": "Boutique hotel general managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a923786f277d4ab5b819"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the six signed $500 audits are owner-performed at 6 hours each (36 hours), and each is one 6-hour stay, twice the 3-hour weekly limit, so within the limit no audit can be delivered ($0).",
+     "resolution": "Allow 36 owner hours inside the first 14 days (about 18 h/week for two weeks, each week at least 6 h per audit scheduled) so all six reports are done by day 14; at the card's 7 days to usable cash (paid within 5 days of each report) the $3,000 then settles by day 21. 12 h/week is not enough: the last two audits would finish in week 3 and be paid after day 21. Alternatively the hotels would have to accept a fulfiller other than the owner, which nothing on the record offers.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Remedy 'allow 12 h/week' does not settle $3,000 inside 21 days",
+      "resolution": "Accepted. The relaxation is now 36 hours inside the first 14 days (~18 h/week), so all six reports are done by day 14 and, at the card's 7 days to usable cash, paid by day 21."
+     },
+     {
+      "finding": "MAJOR: The weekly ceiling is 3 h; a 6-hour single-stay audit cannot be done in any one week within it",
+      "resolution": "Accepted. The offerScope makes each audit one check-in-to-checkout stay of 6 owner hours; within 3 h/week no audit fits, so the reachable amount is $0, and the $500 alternative is removed."
+     },
+     {
+      "finding": "NOTE: decisiveLinks is empty, which is consistent",
+      "resolution": "Kept: no chain link is missing; OWNER_HOURS is the binding constraint."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a923786f277d4ab5b819",
+      "why": "Needs 36 owner hours (6-hour stays) for the $3,000; the limit is 3 hours a week."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow 36 owner hours inside the first 14 days (about 18 h/week) so all six signed audits are reported by day 14 and paid by day 21; at 3 h/week no 6-hour audit fits and the reachable amount is $0.",
+      "basis": [
+       {
+        "opportunityId": "cop_a923786f277d4ab5b819",
+        "field": "captureMechanism"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_6472d3d5c1db_339d46",
+    "digest": "6472d3d5c1dbf6929a0898db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:35.912Z"
+   },
+   "review": {
+    "revisionId": "rev_6472d3d5c1db_339d46",
+    "revisionDigest": "6472d3d5c1dbf6929a0898db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_5de3e229ce0b461abdee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bdab0dcb5d7446d4a34a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_8774b500b36a_ca87a2 are fixed. NO_PLAN on an OWNER_HOURS constraint is right: 6 WRITTEN_ACCEPTANCE orders x $500 = $3,000, all chain links established (Brain: none missing), but each audit is one check-in-to-checkout stay of 6 owner hours (card offerScope/fulfillmentOwner: the owner personally), twice the 3 h weekly limit, so within the limit $0 is reachable. Recomputed remedy: 36 hours finished by day 14 = 18 h/week for two weeks; last report day 14 + the card's 7 days to usable cash (paid within 5 days of the report) = day 21, inside the 21-day window; 12 h/week correctly rejected (audits 5-6 in week 3, paid after day 21). decisiveLinks empty is consistent with a pure constraint.",
+    "findings": [
+     "NOTE: The day-14 schedule lands exactly on day 21, with no slack; any audit slipping a day, or a hotel paying on day 5 plus bank settlement beyond the card's 7 days, misses the window. Finishing by ~day 12 (about 21 h/week) would leave margin."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:45:30.698Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 21 days with no more than 3 hours a week of my own time.",
+    "terms": "9ac49b0d29dbc176",
+    "openings": {
+     "cop_a923786f277d4ab5b819": "a538ac10ada63bdf"
+    }
+   },
+   "at": "2026-11-28T01:47:43.156Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

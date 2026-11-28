@@ -1,0 +1,2070 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_46f6f268a43a43c796ac",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount has settled as cash in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "ad7956cbfad8879a37e5065d"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_46f6f268a43a43c796ac",
+    "contractDigest": "ad7956cbfad8879a37e5065d",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the five signed projector service visits through LumenTech",
+     "opportunityIds": [
+      "cop_9801171e716445ffaa55"
+     ],
+     "why": "Five written orders x $650 = $3,250 settled cash >= $3,000. LumenTech (written quote $300/visit) completes all visits by day 14; cinemas pay within 10 days (by day 24); LumenTech is paid net 15 (by day 29) after the receipts, so no up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Film-rental settlement reconciliation workbook",
+      "why": "Card-at-checkout workbook at $240 to 310 listed cinemas could add cash, but the signed orders already carry the whole target; kept as a backup."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the five cinema managers who signed to schedule visits",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_reach",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Confirm the five signed $650 service-visit orders (written acceptances recorded)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "s_price",
+       "s_agree"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "LumenTech completes all five lamp/filter/alignment visits within the first 14 days at $300 each; invoices net 15",
+      "performer": "LumenTech Field Service",
+      "costCents": 150000,
+      "day": 14,
+      "dependsOn": "s2",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "LumenTech Field Service",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Each cinema pays $650 within 10 days of its visit (by day 24 at the latest)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 24,
+      "dependsOn": "s3",
+      "evidence": [
+       "s_price",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 325000,
+      "label": "Five cinemas pay $650 each within 10 days of visits completed by day 14",
+      "settlesDay": 24,
+      "stepId": "s4"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 150000,
+      "label": "Pay LumenTech net 15 for five visits ($300 each)",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "signedOrders",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "written orders",
+      "sources": [
+       "s_price",
+       "s_agree"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 650,
+      "unit": "USD per visit",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCost",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "USD per visit (written quote)",
+      "sources": [
+       "s_ful",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCapacity",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "visits completed in first 14 days",
+      "sources": [
+       "s_ful"
+      ],
+      "needs": null
+     },
+     {
+      "name": "paymentTerms",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days after visit",
+      "sources": [
+       "s_price",
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#reachableChannel",
+      "dated": "2026-11",
+      "claim": "The five managers who signed, reachable by email",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#price",
+      "dated": "2026-11-18",
+      "claim": "Five independent cinemas signed written orders at $650 per projector service visit (2026-11-18)",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#agreements",
+      "dated": "2026-11-18",
+      "claim": "Five WRITTEN_ACCEPTANCE agreements at $650 each",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#fulfillment",
+      "dated": "2026-11",
+      "claim": "LumenTech written quote $300/visit, completes all five visits in first 14 days, invoices net 15",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#directCosts",
+      "dated": "2026-11",
+      "claim": "$300 direct cost per visit",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_9801171e716445ffaa55#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "10 days to usable cash after a visit",
+      "population": "the five independent cinemas whose managers signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9801171e716445ffaa55"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "why": "Not needed: the five signed service orders alone settle $3,250 inside the window."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "deals": 5,
+      "price": 650,
+      "directCost": 300,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_7bb1ac974926_5d53ee",
+    "digest": "7bb1ac9749265cedc8f4f01b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:08.538Z"
+   },
+   {
+    "goalId": "wst_46f6f268a43a43c796ac",
+    "contractDigest": "ad7956cbfad8879a37e5065d",
+    "parentRevisionId": "rev_7bb1ac974926_5d53ee",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Price-test, then sell the film-settlement reconciliation workbook to 14 of 310 listed cinemas",
+     "opportunityIds": [
+      "cop_438080237a4449f4888e"
+     ],
+     "why": "The projector-service orders now lose money (direct cost $700 vs $650 price), so the plan moves to the workbook: 14 sales x $240 = $3,360 settled cash >= $3,000; measured acceptance 24/200 = 12% means ~117 contacts of 310; card at checkout, 3 days to cash, $5 cost paid from receipts, no capital. The $240 is a comparable-listing benchmark, so a day-5 price test on the first 50 contacts decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Subcontracted projector lamp and filter service",
+      "why": "Five signed orders at $650, but the card's direct cost is now $700 per visit: every deal loses $50."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $240 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $240 from the first 50 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 310 listed buyers once the price test passes (measured rate 24 accepted of 200 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 7000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 9,
+      "stepId": "s5"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 13,
+      "stepId": "s5"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 96000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 17,
+      "stepId": "s5"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 310,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $240 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#buyerVolume",
+      "dated": "2026-11",
+      "claim": "310 reachable buyers with published contacts",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $240 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 24 accepted of 200 contacts",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost per deal",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $240 from the first 50 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $240 by day 5: stop selling at $240; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $240 by day 5: offer to the rest of the 310 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "why": "ECONOMICS: direct cost $700 per visit (card directCosts, EVIDENCE) is above the $650 signed price; each deal loses money."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "deals": 14,
+      "price": 240,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 17
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $240 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_f1b83118cc8a_f30125",
+    "digest": "f1b83118cc8aeb2eb6ec233d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:47:29.746Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_46f6f268a43a43c796ac",
+   "contractDigest": "ad7956cbfad8879a37e5065d",
+   "parentRevisionId": "rev_7bb1ac974926_5d53ee",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Price-test, then sell the film-settlement reconciliation workbook to 14 of 310 listed cinemas",
+    "opportunityIds": [
+     "cop_438080237a4449f4888e"
+    ],
+    "why": "The projector-service orders now lose money (direct cost $700 vs $650 price), so the plan moves to the workbook: 14 sales x $240 = $3,360 settled cash >= $3,000; measured acceptance 24/200 = 12% means ~117 contacts of 310; card at checkout, 3 days to cash, $5 cost paid from receipts, no capital. The $240 is a comparable-listing benchmark, so a day-5 price test on the first 50 contacts decides it."
+   },
+   "alternatives": [
+    {
+     "title": "Subcontracted projector lamp and filter service",
+     "why": "Five signed orders at $650, but the card's direct cost is now $700 per visit: every deal loses $50."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "s_reach"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "OFFER",
+     "label": "Offer the workbook at $240 paid by card at checkout",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "s_price"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Price test: count paid card orders at $240 from the first 50 contacts by day 5",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "price",
+      "conversion",
+      "s_price",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "SELL",
+     "label": "Close the remaining sales to the rest of the 310 listed buyers once the price test passes (measured rate 24 accepted of 200 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "t1",
+     "evidence": [
+      "conversion",
+      "s_conv"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "DELIVER",
+     "label": "Produce each buyer's workbook within 2 days ($5 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 7000,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "directCost",
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "COLLECT",
+     "label": "Card payments settle to the owner's account (3 days to usable cash)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "timeToCash",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 120000,
+     "label": "5 workbook sales paid by card at checkout",
+     "settlesDay": 9,
+     "stepId": "s5"
+    },
+    {
+     "day": 9,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Direct cost of 5 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 120000,
+     "label": "5 workbook sales paid by card at checkout",
+     "settlesDay": 13,
+     "stepId": "s5"
+    },
+    {
+     "day": 13,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Direct cost of 5 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 96000,
+     "label": "4 workbook sales paid by card at checkout",
+     "settlesDay": 17,
+     "stepId": "s5"
+    },
+    {
+     "day": 17,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Direct cost of 4 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 17,
+   "quantities": [
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 310,
+     "unit": "reachable buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD actually paid per workbook",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "paid card orders at $240 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "paid sales per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "USD per workbook",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "timeToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "dealsNeeded",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "sales",
+     "sources": [
+      "s_price",
+      "s_conv"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#buyerVolume",
+     "dated": "2026-11",
+     "claim": "310 reachable buyers with published contacts",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_reach",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#reachableChannel",
+     "dated": "2026-11",
+     "claim": "Published contact emails reach the buyer",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#price",
+     "dated": "2026-11",
+     "claim": "Comparable workbooks list at $240 (listing prices, a benchmark; not a recorded purchase of this offer)",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#conversionRates",
+     "dated": "2026-11",
+     "claim": "Measured on this offer: 24 accepted of 200 contacts",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#directCosts",
+     "dated": "2026-11",
+     "claim": "$5 direct cost per deal",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_438080237a4449f4888e#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to usable cash",
+     "population": "independent cinemas in the alliance member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_438080237a4449f4888e"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 paid card orders at $240 from the first 50 contacts by day 5",
+    "stop": [
+     "Fewer than 3 paid orders at $240 by day 5: stop selling at $240; re-price or drop the opening"
+    ],
+    "continue": [
+     "3 or more paid orders at $240 by day 5: offer to the rest of the 310 listed buyers at the same price"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_438080237a4449f4888e",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "opportunityId": "cop_9801171e716445ffaa55",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_9801171e716445ffaa55",
+     "why": "ECONOMICS: direct cost $700 per visit (card directCosts, EVIDENCE) is above the $650 signed price; each deal loses money."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_438080237a4449f4888e",
+     "deals": 14,
+     "price": 240,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 17
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_438080237a4449f4888e",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $240 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+    }
+   ],
+   "revisionId": "rev_f1b83118cc8a_f30125",
+   "digest": "f1b83118cc8aeb2eb6ec233d",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_92b450f9fb614ea5b45f/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:47:29.746Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_f1b83118cc8a_f30125",
+   "digest": "f1b83118cc8aeb2eb6ec233d",
+   "contractDigest": "ad7956cbfad8879a37e5065d",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 7000,
+    "committedOpenCents": 0,
+    "preProofCents": 7000,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 6,
+    "collectedCents": 336000,
+    "collectedInWindowCents": 336000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 329000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Film-rental settlement reconciliation workbook for independe\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 26320× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Film-rental settlement reconciliation workbook for independent cinemas\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_438080237a4449f4888e",
+     "cop_9801171e716445ffaa55"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Collect payment for \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "title": "Film-rental settlement reconciliation workbook for independent cinemas",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Independent cinema owners and film bookers",
+       "reachableChannel": "Published booking-contact emails in the independent-cinema alliance member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:18.969Z",
+       "offerScope": "A workbook reconciling distributor settlements against box-office reports; delivered in 2 days; paid by card at checkout.",
+       "priceCents": 24000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "independent cinemas",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published booking-contact emails in the independent-cinema alliance member direc"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 240 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 24 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "14 deal(s) needed, 1240 available in the window (310 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The independent-cinema alliance directory lists 310 member cinemas, each with a published booking contact; each settles film rentals with distributors every week.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook reconciling distributor settlements against box-office reports; delivered in 2 days; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "24 agreements from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent cinema owners and film bookers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Comparable film-settlement workbooks sell for $240 on the alliance's member resource store (listing prices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "title": "Subcontracted digital-projector lamp and filter service for independent cinemas",
+      "missing": [
+       "ECONOMICS"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Independent cinema general managers",
+       "reachableChannel": "The five managers who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:18.969Z",
+       "offerScope": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+       "priceCents": 65000,
+       "currency": "USD",
+       "fulfillmentOwner": "LumenTech Field Service (written quote $300 per visit; completes all five visits in the first 14 days; invoices us net 15)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "independent cinemas",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 65000,
+        "currency": "USD",
+        "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 65000,
+        "currency": "USD",
+        "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 65000,
+        "currency": "USD",
+        "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 65000,
+        "currency": "USD",
+        "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 65000,
+        "currency": "USD",
+        "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The five managers who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3250 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3250 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by LumenTech Field Service (written quote $300 per visit; completes all five visits (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "each deal loses money: a cost of 700 against a price of 650"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One lamp, filter and alignment visit; the cinema pays within 10 days of the visit. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$700",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "LumenTech Field Service (written quote $300 per visit; completes all five visits in the first 14 days; invoices us net 15) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent cinema general managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Five independent cinemas signed written orders at $650 per projector service visit (signed orders, 2026-11-18).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_758ee3609ea54181ad4f"
+    ],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:47:05.619Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_7bb1ac974926_5d53ee",
+    "revisionDigest": "7bb1ac9749265cedc8f4f01b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_845a9a4c89c547508079/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Five WRITTEN_ACCEPTANCE agreements at $650 for exactly this visit establish price and demand; LumenTech Field Service is the recorded fulfiller with a written quote ($300/visit), stated capacity (all five in the first 14 days) and net-15 terms, and is the plan's delivery performer. 5 x $650 = $3,250 settles by day 24 (visit by day 14 + pay within 10), above the $3,000 settled-cash target inside 30 days. For any visit day v the cinema pays by v+10 and LumenTech is due v+15, so the supplier is always paid from receipts and no owner capital is advanced; net after LumenTech is $1,750.",
+    "findings": [
+     "Recomputed: 5 x $650 = $3,250 by day 24; supplier 5 x $300 = $1,500 due by day 29; net $1,750; cash never negative; proof day 24 < 30.",
+     "The target is gross settled cash (metric SETTLED_CASH), which $3,250 meets; the owner should understand $1,500 of it is owed to LumenTech by day 29.",
+     "Margin is one deal: if one cinema does not pay, $2,600 < $3,000. The $240 workbook backup does not cover that shortfall as evidenced - its price is comparable listings on the alliance store (other sellers' asks), not a purchase price - so it is a test, not a reserve.",
+     "Card humanHours 0.5 per deal is not shown in the plan; no owner-hours limit applies.",
+     "Executor SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED: scheduling and invoicing must be connected (or done by the owner) on day 1 so visits finish by day 14."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:42:15.650Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_f1b83118cc8a_f30125",
+    "revisionDigest": "f1b83118cc8aeb2eb6ec233d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_845a9a4c89c547508079/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The re-plan responds correctly to the changed record. The projector-service card's directCosts is now $700 per visit (EVIDENCE) against the $650 signed price, so each deal loses $50 and the five orders would leave the owner $250 out of pocket once LumenTech is paid; Brain's ECONOMICS link fails and the opening is rightly excluded. The workbook is the remaining opening: 310 weekly-settling cinemas, 12% acceptance measured on this offer, Brain-produced spreadsheet (proved), $5 cost, card at checkout, 3 days to cash. Its $240 is a comparable-listing benchmark, so CONDITIONAL on a price test is the right stance, with the disagreement with Brain's OFFER_AND_PRICE recorded. Threshold check: 3 paid of 50 (6%) -> 3 + 0.06 x 260 = ~18 orders x $240 = $4,320 >= $3,000; at 12%, 14 orders need ~117 contacts. Stop (<3) and continue (>=3) cover every outcome; costs paid from settled receipts, no capital; last receipts settle about day 17 of 30.",
+    "findings": [
+     "Recomputed: 14 x $240 = $3,360; cost $70; net $3,290; 117 of 310 contacts; settles by day 17 < 30.",
+     "Projector card is internally inconsistent: the fulfillment fact still reads 'written quote $300 per visit' while directCosts is $700. Treating the newer $700 directCosts as binding is the cautious reading; if the $300 quote still stood the five signed orders ($3,250) would be the better plan, so the owner should confirm which LumenTech cost is current.",
+     "Minor: the ledger's first receipts are day 6, after the day-5 test, so the test orders themselves are not shown; and s4 DELIVER (day 4) depends on s3 (day 6). Show the test-batch receipts by day 5.",
+     "Minor: dealsNeeded is marked EVIDENCED though it holds only if the price is $240.",
+     "Mailbox and checkout must be connected before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:48:52.206Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_f1b83118cc8a_f30125",
+   "digest": "f1b83118cc8aeb2eb6ec233d",
+   "contractDigest": "ad7956cbfad8879a37e5065d",
+   "plan": {
+    "goalId": "wst_46f6f268a43a43c796ac",
+    "contractDigest": "ad7956cbfad8879a37e5065d",
+    "parentRevisionId": "rev_7bb1ac974926_5d53ee",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Price-test, then sell the film-settlement reconciliation workbook to 14 of 310 listed cinemas",
+     "opportunityIds": [
+      "cop_438080237a4449f4888e"
+     ],
+     "why": "The projector-service orders now lose money (direct cost $700 vs $650 price), so the plan moves to the workbook: 14 sales x $240 = $3,360 settled cash >= $3,000; measured acceptance 24/200 = 12% means ~117 contacts of 310; card at checkout, 3 days to cash, $5 cost paid from receipts, no capital. The $240 is a comparable-listing benchmark, so a day-5 price test on the first 50 contacts decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Subcontracted projector lamp and filter service",
+      "why": "Five signed orders at $650, but the card's direct cost is now $700 per visit: every deal loses $50."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $240 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $240 from the first 50 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 310 listed buyers once the price test passes (measured rate 24 accepted of 200 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 7000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 9,
+      "stepId": "s5"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 13,
+      "stepId": "s5"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 96000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 17,
+      "stepId": "s5"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 310,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $240 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#buyerVolume",
+      "dated": "2026-11",
+      "claim": "310 reachable buyers with published contacts",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $240 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 24 accepted of 200 contacts",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost per deal",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_438080237a4449f4888e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent cinemas in the alliance member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_438080237a4449f4888e"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $240 from the first 50 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $240 by day 5: stop selling at $240; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $240 by day 5: offer to the rest of the 310 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_9801171e716445ffaa55",
+      "why": "ECONOMICS: direct cost $700 per visit (card directCosts, EVIDENCE) is above the $650 signed price; each deal loses money."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "deals": 14,
+      "price": 240,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 17
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_438080237a4449f4888e",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $240 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_f1b83118cc8a_f30125",
+    "digest": "f1b83118cc8aeb2eb6ec233d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:47:29.746Z"
+   },
+   "review": {
+    "revisionId": "rev_f1b83118cc8a_f30125",
+    "revisionDigest": "f1b83118cc8aeb2eb6ec233d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92b450f9fb614ea5b45f/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_845a9a4c89c547508079/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The re-plan responds correctly to the changed record. The projector-service card's directCosts is now $700 per visit (EVIDENCE) against the $650 signed price, so each deal loses $50 and the five orders would leave the owner $250 out of pocket once LumenTech is paid; Brain's ECONOMICS link fails and the opening is rightly excluded. The workbook is the remaining opening: 310 weekly-settling cinemas, 12% acceptance measured on this offer, Brain-produced spreadsheet (proved), $5 cost, card at checkout, 3 days to cash. Its $240 is a comparable-listing benchmark, so CONDITIONAL on a price test is the right stance, with the disagreement with Brain's OFFER_AND_PRICE recorded. Threshold check: 3 paid of 50 (6%) -> 3 + 0.06 x 260 = ~18 orders x $240 = $4,320 >= $3,000; at 12%, 14 orders need ~117 contacts. Stop (<3) and continue (>=3) cover every outcome; costs paid from settled receipts, no capital; last receipts settle about day 17 of 30.",
+    "findings": [
+     "Recomputed: 14 x $240 = $3,360; cost $70; net $3,290; 117 of 310 contacts; settles by day 17 < 30.",
+     "Projector card is internally inconsistent: the fulfillment fact still reads 'written quote $300 per visit' while directCosts is $700. Treating the newer $700 directCosts as binding is the cautious reading; if the $300 quote still stood the five signed orders ($3,250) would be the better plan, so the owner should confirm which LumenTech cost is current.",
+     "Minor: the ledger's first receipts are day 6, after the day-5 test, so the test orders themselves are not shown; and s4 DELIVER (day 4) depends on s3 (day 6). Show the test-batch receipts by day 5.",
+     "Minor: dealsNeeded is marked EVIDENCED though it holds only if the price is $240.",
+     "Mailbox and checkout must be connected before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:48:52.206Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_438080237a4449f4888e": "fe2c43163382f495",
+     "cop_9801171e716445ffaa55": "c8cddf6c7bbfe73e"
+    }
+   },
+   "at": "2026-11-28T01:49:35.828Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,98 @@
+[
+  {
+    "id": "aq-01-1k-14d-five-hours",
+    "objective": "I want $1,000 of settled cash in my account within 14 days. I have no money to put in and I can give it at most 5 hours a week of my own time.",
+    "rubric": {
+      "constraints": { "target": 1000, "windowDays": 14, "capitalMax": 0, "ownerHoursMax": 10, "industry": null, "net": false },
+      "dimensions": { "capital": "none", "target": "small", "deadline": "short", "autonomy": "owner-hours-limited" },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every link — a reachable buyer (a named channel or counted list), current demand, a purchase price buyers are shown to pay for this deliverable, a measured or written-agreement conversion, volume for this seller, an established fulfiller, a direct cost below the price, and cash that settles by day 14 — is backed by a cited, real, retrievable public source or a real measurement the plan took, and the plan needs $0 tied up and no more than 10 owner hours in total (5 a week × 2 weeks), with buyer-payment and any supplier-payment days stated on or before day 14.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific opportunities it discovered (buyer segment, offer, price) each with public citations; names for each the decisive missing link (most often CONVERSION, since nobody has been asked yet, or SETTLES_IN_TIME on a 14-day window); and gives a concrete experiment that starts inside the first few days — e.g. a stated number of offers to a counted, cited contact list at a cited price, with payment collected up front — that needs $0 and fits the 10 owner hours, with an explicit proof rule (e.g. N paid of M asked by day X) and a stop rule (e.g. stop if fewer than K paid by day Y).",
+        "Either way, every opening it considered is accounted for as used or excluded with a reason."
+      ],
+      "incorrectIf": [
+        "A generic refusal ('not enough information', 'cannot guarantee income') with no opportunity discovered or cited.",
+        "Opportunities listed without public citations, or citations that do not support the figure quoted.",
+        "A NO_PLAN that names no decisive link, or names one the evidence does not support (e.g. calls MARKET_VOLUME missing while citing a counted directory and omits that nobody has been asked).",
+        "An experiment that cannot produce settled cash or a measurement inside 14 days, needs paid ads or other spend, or needs more than 10 owner hours.",
+        "A plan that relies on the owner's routine labour beyond the hours (e.g. owner-performed freelance gigs of 20+ hours)."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE verdict resting on an estimated conversion or volume, a price that is only a person's word or a single blog's 'you can charge', or a category total shared among many sellers read as this seller's sales.",
+        "Counting a wage, hourly rate for employment, grant, prize, bounty or rebate as the purchase price of a deliverable.",
+        "Any plan that ties up money, schedules cash after day 14 (marketplace payout holds included), or schedules more than 10 owner hours."
+      ],
+      "doNotRequire": "A specific industry or an EXECUTABLE verdict: with no prior buyer contact, a correct result is usually (B); an (A) is correct only if its conversion and volume are genuinely measured or agreed and cited."
+    }
+  },
+  {
+    "id": "aq-02-printing-shops-5k-30d",
+    "objective": "Make $5,000 within 30 days selling to commercial printing shops only. I can put in up to $500.",
+    "rubric": {
+      "constraints": { "target": 5000, "windowDays": 30, "capitalMax": 500, "ownerHoursMax": null, "industry": "commercial printing shops", "net": false },
+      "dimensions": { "capital": "small", "target": "medium", "deadline": "long", "autonomy": "unlimited" },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose buyers are all commercial printing businesses (offset, digital, wide-format or print-for-pay shops), with every chain link cited to real, retrievable evidence: a counted reachable population of printers (e.g. a trade-association or state-registry count) or written agreements, a price printers are shown to pay for this deliverable, measured or agreed conversion, an established fulfiller, direct cost below price, at most $500 tied up at any time, and every buyer payment and supplier payment scheduled by day 30.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific opportunities inside the printing industry (e.g. a service printers buy — prepress, estimating, equipment brokerage, overflow capacity — with cited prices and a cited count of printers), identifies the decisive missing link per opportunity, and proposes an executable test inside $500 and 30 days (a stated number of offers to a cited printer list, a pre-sale or deposit, a quoted subcontractor) with explicit proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Any plan or test whose buyers are outside commercial printing (e.g. selling print to restaurants or consumers, i.e. using printers as suppliers rather than buyers) presented as satisfying the named industry.",
+        "A generic refusal, or no printing-industry opportunity discovered with citations.",
+        "No decisive link named, or a test that costs more than $500 or cannot finish inside 30 days."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE verdict on estimated, word-only or contradicted evidence, or on a price taken from another buyer's or another product's source.",
+        "A plan that ties up more than $500 (e.g. buying used press equipment for resale without a prepaid buyer), schedules cash after day 30, or counts a non-purchase figure (grant, rebate, reward, wage) as a price.",
+        "An out-of-industry opening counted toward the $5,000."
+      ],
+      "doNotRequire": "A particular offer or an EXECUTABLE verdict; equipment brokerage, prepress or estimating services are examples, not answers."
+    }
+  },
+  {
+    "id": "aq-03-12k-net-45d-capital",
+    "objective": "I want to clear $12,000 in profit — money kept after every cost — within 45 days. I can put up to $2,500 of my own money in, and I don't care which industry.",
+    "rubric": {
+      "constraints": { "target": 12000, "windowDays": 45, "capitalMax": 2500, "ownerHoursMax": null, "industry": null, "net": true },
+      "dimensions": { "capital": "large", "target": "large", "deadline": "long", "autonomy": "unlimited" },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose counted deals keep at least $12,000 AFTER their direct costs (supplier, materials, fees, ad spend), every link cited to real verified evidence, capital tied up never above $2,500 at any point of the cash calendar (including supplier payments before buyer payments), and all net cash settled by day 45.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names specific discovered opportunities (at least three, across more than one industry) with cited prices, cited direct costs and cited buyer counts; computes each one's margin per deal and the deals needed to keep $12,000; names the decisive missing link (or the infeasible constraint — e.g. that capital turns at $2,500 cannot carry $12,000 of margin in 45 days on the cited margins); and gives a concrete staged experiment inside $2,500 and 45 days with proof/stop rules.",
+        "A conclusion that the target is out of reach is correct only if it is shown from cited margins, capital turns or counted buyers, not asserted."
+      ],
+      "incorrectIf": [
+        "Reasoning on gross revenue only, with no per-deal margin or no net arithmetic.",
+        "A generic refusal or 'too ambitious' without discovered, cited opportunities and arithmetic.",
+        "An experiment that needs more than $2,500 or ends after day 45, or a decisive link that the evidence cited does not support."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan that reaches $12,000 only on gross revenue, or uses any member whose cost is at or above its price.",
+        "An EXECUTABLE plan whose calendar ties up more than $2,500 at once (inventory, deposits, ad spend ahead of buyer payment) or settles after day 45.",
+        "An EXECUTABLE verdict on estimated, word-only, contradicted or non-purchase-price evidence, or on one organisation's single purchase swept as many repeat buyers."
+      ],
+      "doNotRequire": "That an executable plan be found; on a $12,000 net target with $2,500 a justified (B) is likely, but a fully evidenced (A) is not penalised."
+    }
+  },
+  {
+    "id": "aq-04-2500-21d-hands-off",
+    "objective": "Get $2,500 into my account within 21 days without spending anything up front. I won't do any of the work myself — Brain or someone it hires has to do all of it.",
+    "rubric": {
+      "constraints": { "target": 2500, "windowDays": 21, "capitalMax": 0, "ownerHoursMax": 0, "industry": null, "net": false },
+      "dimensions": { "capital": "none", "target": "small", "deadline": "long", "autonomy": "owner-hours-limited" },
+      "passIf": [
+        "(A) An EXECUTABLE plan in which every step is performed by Brain or a named, quoted subcontractor (no owner fulfilment, no owner sales calls), every link cited to real verified evidence, nothing tied up — any subcontractor is paid after or from the buyer's payment — and buyer and supplier payments scheduled by day 21.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion naming at least two discovered opportunities Brain or a subcontractor could fulfil, with public citations for buyer counts and prices; the decisive missing link for each (e.g. CONVERSION unmeasured, FULFILMENT not quoted, SETTLES_IN_TIME given payout holds); and a zero-cost, zero-owner-hour experiment (e.g. Brain-sent offers to a counted, cited list with prepayment, or a subcontractor quote request) with proof and stop rules inside 21 days."
+      ],
+      "incorrectIf": [
+        "A plan or experiment that needs the owner to perform the service, make calls, attend meetings or do routine work.",
+        "A generic refusal, or no cited opportunities.",
+        "An experiment that spends money (paid ads, tools, inventory) or cannot report by day 21."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan with any owner hours, any capital tied up, or cash settling after day 21.",
+        "An EXECUTABLE verdict on an unquoted fulfiller, an estimated or word-only price or volume, or a non-purchase figure (wage, grant, reward, bounty) counted as price.",
+        "Brain listed as fulfiller of work the evidence says requires a licensed or physical human performer, without a named subcontractor."
+      ],
+      "doNotRequire": "An EXECUTABLE verdict or a particular industry."
+    }
+  }
+]

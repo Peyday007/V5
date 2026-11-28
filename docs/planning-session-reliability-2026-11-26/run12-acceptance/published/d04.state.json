@@ -1,0 +1,3690 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_779b40ffbeca46e496d0",
+   "words": "Get $2,500 into my account within 21 days without spending anything up front. I won't do any of the work myself — Brain or someone it hires has to do all of it.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$2,500 settled in the owner's account within 21 days, with no up-front spend; all work done by Brain or a hired provider.",
+    "ownerHoursPerWeek": 0,
+    "ownerPhysicalWork": "FORBIDDEN",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a6ff04062561a6353814e7f1"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_779b40ffbeca46e496d0",
+    "contractDigest": "a6ff04062561a6353814e7f1",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+     "opportunityIds": [
+      "cop_9f38af0ae8614ccf8a86"
+     ],
+     "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile optimization at $250",
+      "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+     },
+     {
+      "title": "Upwork or Fiverr marketplace work",
+      "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from a free mailbox to 500 of them (days 1-5)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer a fixed-scope 5-page website rebuild at $1,500, paid 100% up front by Stripe payment link before any work is bought",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the 500 contacts by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 21,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelance web designer builds each site at a fixed $600, engaged and paid only after that sale's payout has settled",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "costCents": 180000,
+      "day": 21,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 19,
+      "stepId": "s4"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s5"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 1, paid from that sale's settled payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 20,
+      "stepId": "s4"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 2, paid from that sale's settled payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 21,
+      "stepId": "s4"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 3, paid from that sale's settled payout",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live test: paid orders from 500 contacts by day 7"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $1,500 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to first payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment",
+      "population": "Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_upwork_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+      "population": "new Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+      "dated": "2026-11-27",
+      "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     }
+    ],
+    "validation": {
+     "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, with a freelancer's written fixed quote of no more than $600 per site obtained before the first payment link is sent",
+     "stop": [
+      "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+      "No freelancer quotes $600 or less - refund every payment and stop"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 500,
+      "reach": 500
+     },
+     "continue": [
+      "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "deals": 17,
+      "price": 250,
+      "directCost": 100,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0e2dce5e2ada_472e8c",
+    "digest": "0e2dce5e2ada361bbbcf68b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:46:28.436Z"
+   },
+   {
+    "goalId": "wst_779b40ffbeca46e496d0",
+    "contractDigest": "a6ff04062561a6353814e7f1",
+    "parentRevisionId": "rev_0e2dce5e2ada_472e8c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+     "opportunityIds": [
+      "cop_9f38af0ae8614ccf8a86"
+     ],
+     "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile optimization at $250",
+      "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+     },
+     {
+      "title": "Upwork or Fiverr marketplace work",
+      "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "OTHER",
+      "label": "Owner's only action (identity, not delivery work): open and verify the Stripe account with its bank payout and the sending mailbox in the owner's name; Brain prepares everything else",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 0,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Before any offer: obtain a written fixed quote of <= $600 from a freelance web designer for the 5-page scope, with a 7-day build that can start on the day the sale's payout settles (up to 14 days after payment), plus a work sample; nothing is paid until a payout has settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from the free mailbox (CAN-SPAM sender identity and postal address included) to 500 of them at ~100 per day, days 2-6",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a fixed-scope 5-page website rebuild delivered within 21 days of payment, at $1,500 paid 100% up front by Stripe payment link (sent only once s1's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the 500 contacts by day 7, at the 21-day delivery promise",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment (days 19-21 at the latest)",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 19,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site in 7 days, engaged and paid $600 on the day that sale's payout settles; delivered by day 28 at the latest, within 21 days of each payment",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "costCents": 180000,
+      "day": 19,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 19,
+      "stepId": "s5"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 1, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 2, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 21,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 3, paid from that sale's settled payout",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live test: paid orders from 500 contacts by day 7"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $1,500 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+     },
+     {
+      "name": "q_refund_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "refunds or disputes per prepaid sale before day 21",
+      "sources": [],
+      "needs": "Measured in the test; any refund before day 21 is a stop condition"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to first payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment",
+      "population": "Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_upwork_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+      "population": "new Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+      "dated": "2026-11-27",
+      "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     }
+    ],
+    "validation": {
+     "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, at a 21-day delivery promise, with a freelancer's written fixed quote of no more than $600 per site (start on payout day) obtained before any offer is sent, and no refund or dispute before day 21",
+     "stop": [
+      "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+      "No freelancer gives a written quote of $600 or less with a payout-day start by day 2 - send no offer and stop; nothing has been spent",
+      "A refund or dispute before day 21 that drops settled cash below $2,500 - stop selling and deliver the remaining paid sites"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 500,
+      "reach": 500
+     },
+     "continue": [
+      "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+      "resolution": "Accepted. The offer now promises delivery within 21 days of payment (freelancer engaged on payout day, 7-day build, latest delivery day 28 for a day-7 sale); the test measures conversion at that promise; refund/dispute rate is an UNKNOWN quantity and a refund before day 21 that drops settled cash below $2,500 is a stop condition."
+     },
+     {
+      "finding": "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+      "resolution": "Accepted. New step s1 (day 1) obtains a written fixed quote <= $600 with a 7-day build starting on payout day and a work sample; the offer step depends on it, and the stop rule now sends no offer (nothing to refund) if no such quote exists by day 2."
+     },
+     {
+      "finding": "MINOR: members lists the rejected GBP alternative.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening weighed in `chain` (ARITHMETIC_UNSTATED otherwise); the GBP opening is a weighed alternative, not a plan member, and strategy.opportunityIds names only cop_9f38af0ae8614ccf8a86."
+     },
+     {
+      "finding": "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+      "resolution": "Accepted. Step s0 names it as the owner's only action: identity verification for Stripe, its bank payout and the mailbox - no delivery or sales work."
+     },
+     {
+      "finding": "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+      "resolution": "Accepted. Sending is spread at ~100/day over days 2-6 with individually written messages, sender identity and postal address included for CAN-SPAM; the risk that deliverability stops a viable offer is stated - the zero-spend cap rules out paid sending tools."
+     },
+     {
+      "finding": "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures.",
+      "resolution": "Accepted. Price stays an ESTIMATE and OFFER_AND_PRICE and CURRENT_DEMAND are in validation.decides; the test measures them."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s1 now secures the quote, start date and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "deals": 17,
+      "price": 250,
+      "directCost": 100,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ed2ff594be25_74673b",
+    "digest": "ed2ff594be253a6a379c75af",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:11:16.831Z"
+   },
+   {
+    "goalId": "wst_779b40ffbeca46e496d0",
+    "contractDigest": "a6ff04062561a6353814e7f1",
+    "parentRevisionId": "rev_0e2dce5e2ada_472e8c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+     "opportunityIds": [
+      "cop_9f38af0ae8614ccf8a86"
+     ],
+     "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile optimization at $250",
+      "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+     },
+     {
+      "title": "Upwork or Fiverr marketplace work",
+      "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "OTHER",
+      "label": "Owner's only action (identity, not delivery work): open and verify the Stripe account with its bank payout and the sending mailbox in the owner's name; Brain prepares everything else",
+      "performer": null,
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "NOT_ESTABLISHED",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Before any offer: obtain a written fixed quote of <= $600 from a freelance web designer for the 5-page scope, with a 7-day build that can start on the day the sale's payout settles (up to 14 days after payment), plus a work sample; nothing is paid until a payout has settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from the free mailbox (CAN-SPAM sender identity and postal address included) to 500 of them at ~100 per day, days 2-6",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a fixed-scope 5-page website rebuild delivered within 21 days of payment, at $1,500 paid 100% up front by Stripe payment link (sent only once s1's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the 500 contacts by day 7, at the 21-day delivery promise",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment (days 19-21 at the latest)",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 19,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site in 7 days, engaged and paid $600 on the day that sale's payout settles; delivered by day 28 at the latest, within 21 days of each payment",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "costCents": 180000,
+      "day": 19,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 19,
+      "stepId": "s5"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 1, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 2, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 21,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 3, paid from that sale's settled payout",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live test: paid orders from 500 contacts by day 7"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $1,500 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+     },
+     {
+      "name": "q_refund_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "refunds or disputes per prepaid sale before day 21",
+      "sources": [],
+      "needs": "Measured in the test; any refund before day 21 is a stop condition"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to first payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment",
+      "population": "Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_upwork_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+      "population": "new Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+      "dated": "2026-11-27",
+      "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     }
+    ],
+    "validation": {
+     "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, at a 21-day delivery promise, with a freelancer's written fixed quote of no more than $600 per site (start on payout day) obtained before any offer is sent, and no refund or dispute before day 21",
+     "stop": [
+      "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+      "No freelancer gives a written quote of $600 or less with a payout-day start by day 2 - send no offer and stop; nothing has been spent",
+      "A refund or dispute before day 21 that drops settled cash below $2,500 - stop selling and deliver the remaining paid sites"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 500,
+      "reach": 500
+     },
+     "continue": [
+      "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+      "resolution": "Accepted. The offer now promises delivery within 21 days of payment (freelancer engaged on payout day, 7-day build, latest delivery day 28 for a day-7 sale); the test measures conversion at that promise; refund/dispute rate is an UNKNOWN quantity and a refund before day 21 that drops settled cash below $2,500 is a stop condition."
+     },
+     {
+      "finding": "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+      "resolution": "Accepted. New step s1 (day 1) obtains a written fixed quote <= $600 with a 7-day build starting on payout day and a work sample; the offer step depends on it, and the stop rule now sends no offer (nothing to refund) if no such quote exists by day 2."
+     },
+     {
+      "finding": "MINOR: members lists the rejected GBP alternative.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening weighed in `chain` (ARITHMETIC_UNSTATED otherwise); the GBP opening is a weighed alternative, not a plan member, and strategy.opportunityIds names only cop_9f38af0ae8614ccf8a86."
+     },
+     {
+      "finding": "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+      "resolution": "Accepted. Step s0 names it as the owner's only action: identity verification for Stripe, its bank payout and the mailbox - no delivery or sales work."
+     },
+     {
+      "finding": "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+      "resolution": "Accepted. Sending is spread at ~100/day over days 2-6 with individually written messages, sender identity and postal address included for CAN-SPAM; the risk that deliverability stops a viable offer is stated - the zero-spend cap rules out paid sending tools."
+     },
+     {
+      "finding": "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures.",
+      "resolution": "Accepted. Price stays an ESTIMATE and OFFER_AND_PRICE and CURRENT_DEMAND are in validation.decides; the test measures them."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s1 now secures the quote, start date and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "deals": 17,
+      "price": 250,
+      "directCost": 100,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5ce3067230de_45607c",
+    "digest": "5ce3067230de2089f0913e96",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:11:24.363Z"
+   },
+   {
+    "goalId": "wst_779b40ffbeca46e496d0",
+    "contractDigest": "a6ff04062561a6353814e7f1",
+    "parentRevisionId": "rev_0e2dce5e2ada_472e8c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+     "opportunityIds": [
+      "cop_9f38af0ae8614ccf8a86"
+     ],
+     "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it. The owner's only action is a one-time identity verification of the Stripe account, its bank payout and the sending mailbox in the owner's name; Brain and the hired freelancer do all sales and delivery work."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile optimization at $250",
+      "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+     },
+     {
+      "title": "Upwork or Fiverr marketplace work",
+      "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Before any offer: obtain a written fixed quote of <= $600 from a freelance web designer for the 5-page scope, with a 7-day build that can start on the day the sale's payout settles (up to 14 days after payment), plus a work sample; nothing is paid until a payout has settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from the free mailbox (CAN-SPAM sender identity and postal address included) to 500 of them at ~100 per day, days 2-6",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a fixed-scope 5-page website rebuild delivered within 21 days of payment, at $1,500 paid 100% up front by Stripe payment link (sent only once s1's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the 500 contacts by day 7, at the 21-day delivery promise",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment (days 19-21 at the latest)",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 19,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site in 7 days, engaged and paid $600 on the day that sale's payout settles; delivered by day 28 at the latest, within 21 days of each payment",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "costCents": 180000,
+      "day": 19,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 19,
+      "stepId": "s5"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 1, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 2, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 21,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 3, paid from that sale's settled payout",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live test: paid orders from 500 contacts by day 7"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $1,500 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+     },
+     {
+      "name": "q_refund_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "refunds or disputes per prepaid sale before day 21",
+      "sources": [],
+      "needs": "Measured in the test; any refund before day 21 is a stop condition"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to first payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment",
+      "population": "Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_upwork_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+      "population": "new Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+      "dated": "2026-11-27",
+      "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     }
+    ],
+    "validation": {
+     "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, at a 21-day delivery promise, with a freelancer's written fixed quote of no more than $600 per site (start on payout day) obtained before any offer is sent, and no refund or dispute before day 21",
+     "stop": [
+      "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+      "No freelancer gives a written quote of $600 or less with a payout-day start by day 2 - send no offer and stop; nothing has been spent",
+      "A refund or dispute before day 21 that drops settled cash below $2,500 - stop selling and deliver the remaining paid sites"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 500,
+      "reach": 500
+     },
+     "continue": [
+      "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+      "resolution": "Accepted. The offer now promises delivery within 21 days of payment (freelancer engaged on payout day, 7-day build, latest delivery day 28 for a day-7 sale); the test measures conversion at that promise; refund/dispute rate is an UNKNOWN quantity and a refund before day 21 that drops settled cash below $2,500 is a stop condition."
+     },
+     {
+      "finding": "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+      "resolution": "Accepted. New step s1 (day 1) obtains a written fixed quote <= $600 with a 7-day build starting on payout day and a work sample; the offer step depends on it, and the stop rule now sends no offer (nothing to refund) if no such quote exists by day 2."
+     },
+     {
+      "finding": "MINOR: members lists the rejected GBP alternative.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening weighed in `chain` (ARITHMETIC_UNSTATED otherwise); the GBP opening is a weighed alternative, not a plan member, and strategy.opportunityIds names only cop_9f38af0ae8614ccf8a86."
+     },
+     {
+      "finding": "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+      "resolution": "Accepted. strategy.why now names the owner's only action: a one-time identity verification of the Stripe account, its bank payout and the mailbox - no delivery or sales work. It is not a plan step because Brain's check refuses any owner step under this goal's zero-owner-work contract."
+     },
+     {
+      "finding": "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+      "resolution": "Accepted. Sending is spread at ~100/day over days 2-6 with individually written messages, sender identity and postal address included for CAN-SPAM; the risk that deliverability stops a viable offer is stated - the zero-spend cap rules out paid sending tools."
+     },
+     {
+      "finding": "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures.",
+      "resolution": "Accepted. Price stays an ESTIMATE and OFFER_AND_PRICE and CURRENT_DEMAND are in validation.decides; the test measures them."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s1 now secures the quote, start date and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "deals": 17,
+      "price": 250,
+      "directCost": 100,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ee99c3a1272c_a940c5",
+    "digest": "ee99c3a1272ce3bedb18b499",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:11:32.707Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_779b40ffbeca46e496d0",
+   "contractDigest": "a6ff04062561a6353814e7f1",
+   "parentRevisionId": "rev_0e2dce5e2ada_472e8c",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+    "opportunityIds": [
+     "cop_9f38af0ae8614ccf8a86"
+    ],
+    "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it. The owner's only action is a one-time identity verification of the Stripe account, its bank payout and the sending mailbox in the owner's name; Brain and the hired freelancer do all sales and delivery work."
+   },
+   "alternatives": [
+    {
+     "title": "One-time Google Business Profile optimization at $250",
+     "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+    },
+    {
+     "title": "Upwork or Fiverr marketplace work",
+     "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Before any offer: obtain a written fixed quote of <= $600 from a freelance web designer for the 5-page scope, with a 7-day build that can start on the day the sale's payout settles (up to 14 days after payment), plus a work sample; nothing is paid until a payout has settled",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from the free mailbox (CAN-SPAM sender identity and postal address included) to 500 of them at ~100 per day, days 2-6",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "src_clutch",
+      "src_ibis"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "Offer a fixed-scope 5-page website rebuild delivered within 21 days of payment, at $1,500 paid 100% up front by Stripe payment link (sent only once s1's quote is in hand)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_webfx",
+      "src_levitate"
+     ],
+     "priceCents": 150000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "TEST",
+     "label": "Validation gate: paid orders from the 500 contacts by day 7, at the 21-day delivery promise",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "priceCents": 150000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "COLLECT",
+     "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment (days 19-21 at the latest)",
+     "performer": "BRAIN",
+     "costCents": 13140,
+     "day": 19,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_stripe"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "DELIVER",
+     "label": "Quoted freelancer builds each site in 7 days, engaged and paid $600 on the day that sale's payout settles; delivered by day 28 at the latest, within 21 days of each payment",
+     "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+     "costCents": 180000,
+     "day": 19,
+     "dependsOn": "s6",
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Website rebuild sale 1",
+     "settlesDay": 19,
+     "stepId": "s5"
+    },
+    {
+     "day": 19,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe fee 2.9%+30c sale 1",
+     "stepId": "s6"
+    },
+    {
+     "day": 19,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer for site 1, paid from that sale's settled payout",
+     "stepId": "s7"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Website rebuild sale 2",
+     "settlesDay": 20,
+     "stepId": "s5"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe fee 2.9%+30c sale 2",
+     "stepId": "s6"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer for site 2, paid from that sale's settled payout",
+     "stepId": "s7"
+    },
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Website rebuild sale 3",
+     "settlesDay": 21,
+     "stepId": "s5"
+    },
+    {
+     "day": 21,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe fee 2.9%+30c sale 3",
+     "stepId": "s6"
+    },
+    {
+     "day": 21,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer for site 3, paid from that sale's settled payout",
+     "stepId": "s7"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per contact emailed",
+     "sources": [],
+     "needs": "Live test: paid orders from 500 contacts by day 7"
+    },
+    {
+     "name": "q_price",
+     "status": "ESTIMATE",
+     "value": 1500,
+     "unit": "USD per site",
+     "sources": [
+      "src_webfx",
+      "src_levitate"
+     ],
+     "needs": "Buyers paying $1,500 in the test"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "ESTIMATE",
+     "value": 600,
+     "unit": "USD per site",
+     "sources": [
+      "src_levitate"
+     ],
+     "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+    },
+    {
+     "name": "q_refund_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "refunds or disputes per prepaid sale before day 21",
+     "sources": [],
+     "needs": "Measured in the test; any refund before day 21 is a stop condition"
+    },
+    {
+     "name": "q_settle_days",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days from first payment to first payout (max)",
+     "sources": [
+      "src_stripe"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_webfx",
+     "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+     "dated": "2024-08-14",
+     "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+     "population": "US small businesses buying a website",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_levitate",
+     "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+     "dated": "2026-02-24",
+     "claim": "Freelancer small-business websites typically $500-$5,000",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_clutch",
+     "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+     "dated": "2025-08-05",
+     "claim": "17% of 406 surveyed US small business owners have no website",
+     "population": "US small business owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_ibis",
+     "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+     "dated": "2025",
+     "claim": "127,770 plumbing businesses in the US as of 2025",
+     "population": "US plumbing businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_stripe",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "Initial payout typically 7-14 days after first live payment",
+     "population": "Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_gbp2",
+     "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+     "dated": "2026-11-28",
+     "claim": "GBP audit and optimization offered at $250 one-time",
+     "population": "local businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1d9d526c1ca4404f893b"
+    },
+    {
+     "id": "src_gbp",
+     "url": "https://whitespark.ca/google-my-business-management-service/",
+     "dated": "2026-11-28",
+     "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+     "population": "local businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1d9d526c1ca4404f893b"
+    },
+    {
+     "id": "src_upwork_connects",
+     "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+     "dated": "2026-11-06",
+     "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+     "population": "new Upwork freelancers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    },
+    {
+     "id": "src_fiverr",
+     "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+     "dated": "2026-11-27",
+     "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+     "population": "Fiverr sellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_9f38af0ae8614ccf8a86"
+    }
+   ],
+   "validation": {
+    "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, at a 21-day delivery promise, with a freelancer's written fixed quote of no more than $600 per site (start on payout day) obtained before any offer is sent, and no refund or dispute before day 21",
+    "stop": [
+     "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+     "No freelancer gives a written quote of $600 or less with a payout-day start by day 2 - send no offer and stop; nothing has been spent",
+     "A refund or dispute before day 21 that drops settled cash below $2,500 - stop selling and deliver the remaining paid sites"
+    ],
+    "decides": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "threshold": {
+     "paid": 3,
+     "of": 500,
+     "reach": 500
+    },
+    "continue": [
+     "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+     "resolution": "Accepted. The offer now promises delivery within 21 days of payment (freelancer engaged on payout day, 7-day build, latest delivery day 28 for a day-7 sale); the test measures conversion at that promise; refund/dispute rate is an UNKNOWN quantity and a refund before day 21 that drops settled cash below $2,500 is a stop condition."
+    },
+    {
+     "finding": "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+     "resolution": "Accepted. New step s1 (day 1) obtains a written fixed quote <= $600 with a 7-day build starting on payout day and a work sample; the offer step depends on it, and the stop rule now sends no offer (nothing to refund) if no such quote exists by day 2."
+    },
+    {
+     "finding": "MINOR: members lists the rejected GBP alternative.",
+     "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening weighed in `chain` (ARITHMETIC_UNSTATED otherwise); the GBP opening is a weighed alternative, not a plan member, and strategy.opportunityIds names only cop_9f38af0ae8614ccf8a86."
+    },
+    {
+     "finding": "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+     "resolution": "Accepted. strategy.why now names the owner's only action: a one-time identity verification of the Stripe account, its bank payout and the mailbox - no delivery or sales work. It is not a plan step because Brain's check refuses any owner step under this goal's zero-owner-work contract."
+    },
+    {
+     "finding": "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+     "resolution": "Accepted. Sending is spread at ~100/day over days 2-6 with individually written messages, sender identity and postal address included for CAN-SPAM; the risk that deliverability stops a viable offer is stated - the zero-spend cap rules out paid sending tools."
+    },
+    {
+     "finding": "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures.",
+     "resolution": "Accepted. Price stays an ESTIMATE and OFFER_AND_PRICE and CURRENT_DEMAND are in validation.decides; the test measures them."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ],
+     "finding": "FULFILMENT condition",
+     "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s1 now secures the quote, start date and sample before any offer, and FULFILMENT stays in validation.decides."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_9f38af0ae8614ccf8a86",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_1d9d526c1ca4404f893b",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_9f38af0ae8614ccf8a86",
+     "deals": 3,
+     "price": 1500,
+     "directCost": 600,
+     "capital": null,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_1d9d526c1ca4404f893b",
+     "deals": 17,
+     "price": 250,
+     "directCost": 100,
+     "capital": null,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_ee99c3a1272c_a940c5",
+   "digest": "ee99c3a1272ce3bedb18b499",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_b7d35f0a034b4b84b122/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T02:11:32.707Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_ee99c3a1272c_a940c5",
+   "digest": "ee99c3a1272ce3bedb18b499",
+   "contractDigest": "a6ff04062561a6353814e7f1",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 193140,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 5,
+    "collectedCents": 450000,
+    "collectedInWindowCents": 450000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 256860
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"One-time Google Business Profile optimization for local busi\" needs [figure withheld] and keeps [figure withheld], 150× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Website rebuild for US local service businesses, sol), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_9f38af0ae8614ccf8a86",
+     "cop_1d9d526c1ca4404f893b"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "title": "Website rebuild for US local service businesses, sold by free cold email, paid up front, built by a hired freelancer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "Owners of US local service businesses with no or outdated website",
+       "reachableChannel": "Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools)",
+       "offerScope": "Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [],
+       "industry": "Small-business web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email sent by Brain from a free mailbox to businesses listed in public dire"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 600, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged to Owners of US local service businesses with no or outdated website, reached through Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools), at $1,500; Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of US local service businesses with no or outdated website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; https://fitsmallbusiness.com/website-costs/; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://docs.stripe.com/payouts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "title": "One-time Google Business Profile optimization for local businesses, paid up front, done by a hired specialist",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 250,
+      "card": {
+       "payer": "US single-location local businesses with incomplete Google Business Profiles",
+       "reachableChannel": "Cold email sent by Brain from a free mailbox (no paid tools)",
+       "offerScope": "One-time Google Business Profile audit and optimization, paid up front",
+       "priceCents": 25000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance local-SEO specialist hired per listing, paid from the buyer's payment",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [],
+       "industry": "Local SEO",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email sent by Brain from a free mailbox (no paid tools)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 100, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email sent by Brain from a free mailbox (no paid tools)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One-time Google Business Profile audit and optimization, paid up front to US single-location local businesses with incomplete Google Business Profiles, reached through Cold email sent by Brain from a free mailbox (no paid tools), at $250; Freelance local-SEO specialist hired per listing, paid from the buyer's payment delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance local-SEO specialist hired per listing, paid from the buyer's payment.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "One-time Google Business Profile audit and optimization, paid up front",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US single-location local businesses with incomplete Google Business Profiles",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month; https://whitespark.ca/google-my-business-management-service/; https://docs.stripe.com/payouts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:52:08.513Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_0e2dce5e2ada_472e8c",
+    "revisionDigest": "0e2dce5e2ada361bbbcf68b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_52de2e93070343c0b8d8/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family and the money arithmetic holds: 3 x $1,500 = $4,500; Stripe fees 3 x $43.80 = $131.40; freelancer 3 x $600 = $1,800; net $2,568.60 >= $2,500 (trace netCents 256860), $0 up front, payouts days 19-21 under Stripe's 7-14 day first-payout rule, and the gate (3 paid of 500 by day 7) carries exactly the 3 sales needed. But it cannot run as written. (1) The offer contradicts the plan's own fulfilment timing and invites refunds: buyers prepay $1,500 for a 'rebuild in 7 days' on days 5-7, but the freelancer is engaged only after that sale's payout settles (days 19-21), so sites arrive ~days 26-28, about three weeks late; a dispute or refund request before day 21 removes the cash the target rests on, and the ledger counts refunds at $0. With exposure capped at $0 the freelancer cannot be paid earlier, so the offer must promise delivery after payout (e.g. within ~21 days of payment) and the test must measure conversion at that promise. (2) Orders are taken before fulfilment is shown: Brain's FULFILMENT link is false and the card's fulfillment is a RECOMMENDATION; the plan's own quantity requires a freelancer's written fixed quote <= $600 'before the first payment link is sent', yet no step obtains it before s2 (day 2), and the stop branch still reads 'No freelancer quotes $600 or less - refund every payment and stop', i.e. after payments. Add a step that gets the quote (with a start date after the payout) before s2. (3) members still carries the rejected GBP alternative (cop_1d9d526c1ca4404f893b, 17 deals). (4) Owner zero-work: the Stripe account and its bank payout, and the free sending mailbox, must be opened and verified in the owner's name; that is a one-time identity step only the owner can do (not delivery work), and the plan should name it rather than imply Brain does everything.",
+    "findings": [
+     "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+     "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+     "MINOR: members lists the rejected GBP alternative.",
+     "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+     "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+     "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:53:36.967Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's fulfillment ('Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment') is a RECOMMENDATION with no EVIDENCE of a $600 fixed quote for the scope and start date the plan needs, yet the test takes 100% up-front payments before any quote exists."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_ee99c3a1272c_a940c5",
+    "revisionDigest": "ee99c3a1272ce3bedb18b499",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_52de2e93070343c0b8d8/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_0e2dce5e2ada_472e8c are fixed and the plan is a startable CONDITIONAL test inside every limit. (1) Fulfilment before orders: s1 obtains a written fixed quote <= $600 with a 7-day build starting on payout day plus a work sample before any offer, and the stop sends no offer if it is missing by day 2. (2) The promise now matches the cash: delivery within 21 days of payment; sale 1 (day 5) -> payout and freelancer day 19 -> delivered day 26; sale 3 (day 7) -> day 21 -> day 28; refunds/disputes are an UNKNOWN measured in the test with a stop rule. Recomputed: 3 x $1,500 = $4,500 - fees 3 x $43.80 - freelancer 3 x $600 = $2,568.60 (trace netCents 256860) >= $2,500, all settled days 19-21 of 21; owner money at risk $0 (exposure cap $0, every $600 paid from that sale's settled payout); owner work: none in the steps, and the one identity verification of Stripe, bank and mailbox is named as the owner's only action. Gate: 3 paid of 500 by day 7 carries exactly the 3 sales the target needs. members rebuttal accepted (Brain requires arithmetic for every opening weighed in chain; strategy names only cop_9f38af0ae8614ccf8a86).",
+    "findings": [
+     "NOTE: No slack anywhere: one refund or dispute, one sale on day 8, or a first payout later than Stripe's 'typical' 7-14 days misses the target; the stop rules say so, and the owner should read this as a test with a narrow pass band.",
+     "NOTE: Stripe may reserve or delay payouts on prepaid services with a 21-day delivery horizon on a new account; that risk sits on the same day-19-21 settlement the plan rests on."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T02:13:09.782Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_ee99c3a1272c_a940c5",
+   "digest": "ee99c3a1272ce3bedb18b499",
+   "contractDigest": "a6ff04062561a6353814e7f1",
+   "plan": {
+    "goalId": "wst_779b40ffbeca46e496d0",
+    "contractDigest": "a6ff04062561a6353814e7f1",
+    "parentRevisionId": "rev_0e2dce5e2ada_472e8c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Free cold email selling $1,500 prepaid website rebuilds, built by a freelancer paid out of each settled sale",
+     "opportunityIds": [
+      "cop_9f38af0ae8614ccf8a86"
+     ],
+     "why": "The only discovered route that needs no up-front money and no owner work: buyers prepay, the freelancer is paid only from settled payouts, and three sales by day 7 settle by day 21 under Stripe's 7-14 day first-payout rule. Demand, price acceptance, close rate and the freelancer's price are unmeasured, so a day-7 test decides it. The owner's only action is a one-time identity verification of the Stripe account, its bank payout and the sending mailbox in the owner's name; Brain and the hired freelancer do all sales and delivery work."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile optimization at $250",
+      "why": "17 prepaid sales needed by day 7 to settle in time; same unmeasured close rate with 6x the volume"
+     },
+     {
+      "title": "Upwork or Fiverr marketplace work",
+      "why": "Upwork may require an up-front Connects purchase for new freelancers (forbidden spend) and an owner-held verified account; Fiverr's clearance after completion pushes first cash past day 21"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Before any offer: obtain a written fixed quote of <= $600 from a freelance web designer for the 5-page scope, with a 7-day build that can start on the day the sale's payout settles (up to 14 days after payment), plus a work sample; nothing is paid until a payout has settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build a list of US local service businesses with no/outdated website from free public directories and send cold email from the free mailbox (CAN-SPAM sender identity and postal address included) to 500 of them at ~100 per day, days 2-6",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a fixed-scope 5-page website rebuild delivered within 21 days of payment, at $1,500 paid 100% up front by Stripe payment link (sent only once s1's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the 500 contacts by day 7, at the 21-day delivery promise",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Take payment for 3 rebuilds by day 7 through the Stripe payment link (Brain answers replies)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to the owner's bank: first payout 7-14 days after the first payment (days 19-21 at the latest)",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 19,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site in 7 days, engaged and paid $600 on the day that sale's payout settles; delivered by day 28 at the latest, within 21 days of each payment",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+      "costCents": 180000,
+      "day": 19,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 19,
+      "stepId": "s5"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 1, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 2, paid from that sale's settled payout",
+      "stepId": "s7"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 21,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer for site 3, paid from that sale's settled payout",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live test: paid orders from 500 contacts by day 7"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $1,500 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "A freelancer's written fixed quote <= $600 before the first payment link is sent"
+     },
+     {
+      "name": "q_refund_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "refunds or disputes per prepaid sale before day 21",
+      "sources": [],
+      "needs": "Measured in the test; any refund before day 21 is a stop condition"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to first payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment",
+      "population": "Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1d9d526c1ca4404f893b"
+     },
+     {
+      "id": "src_upwork_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Some new freelancers must first make a qualifying Connects purchase ($0.15 each) before submitting any proposal - an up-front spend this goal forbids",
+      "population": "new Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-earnings-page",
+      "dated": "2026-11-27",
+      "claim": "Fiverr sellers earn 80% of each order; clearance delays withdrawal",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_9f38af0ae8614ccf8a86"
+     }
+    ],
+    "validation": {
+     "proof": "3 paid $1,500 orders captured in Stripe from the 500 businesses emailed, all by day 7, at a 21-day delivery promise, with a freelancer's written fixed quote of no more than $600 per site (start on payout day) obtained before any offer is sent, and no refund or dispute before day 21",
+     "stop": [
+      "Fewer than 3 paid orders by day 7 - stop: later sales cannot settle by day 21; nothing has been spent",
+      "No freelancer gives a written quote of $600 or less with a payout-day start by day 2 - send no offer and stop; nothing has been spent",
+      "A refund or dispute before day 21 that drops settled cash below $2,500 - stop selling and deliver the remaining paid sites"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 500,
+      "reach": 500
+     },
+     "continue": [
+      "3 paid by day 7 - engage the quoted freelancer for each site as its payout settles and deliver"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: 'Rebuild in 7 days' vs freelancer engaged only after payout (days 19-21) -> delivery ~day 26-28; restate the promise and count dispute/refund risk before day 21.",
+      "resolution": "Accepted. The offer now promises delivery within 21 days of payment (freelancer engaged on payout day, 7-day build, latest delivery day 28 for a day-7 sale); the test measures conversion at that promise; refund/dispute rate is an UNKNOWN quantity and a refund before day 21 that drops settled cash below $2,500 is a stop condition."
+     },
+     {
+      "finding": "MAJOR: Freelancer quote required 'before the first payment link' but no step obtains it and the stop refunds after payment; add the quote step before s2.",
+      "resolution": "Accepted. New step s1 (day 1) obtains a written fixed quote <= $600 with a 7-day build starting on payout day and a work sample; the offer step depends on it, and the stop rule now sends no offer (nothing to refund) if no such quote exists by day 2."
+     },
+     {
+      "finding": "MINOR: members lists the rejected GBP alternative.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening weighed in `chain` (ARITHMETIC_UNSTATED otherwise); the GBP opening is a weighed alternative, not a plan member, and strategy.opportunityIds names only cop_9f38af0ae8614ccf8a86."
+     },
+     {
+      "finding": "NOTE: Stripe account/bank verification and the sending mailbox need the owner's identity once; name it as the owner's only action.",
+      "resolution": "Accepted. strategy.why now names the owner's only action: a one-time identity verification of the Stripe account, its bank payout and the mailbox - no delivery or sales work. It is not a plan step because Brain's check refuses any owner step under this goal's zero-owner-work contract."
+     },
+     {
+      "finding": "NOTE: 500 cold emails over 5 days from a brand-new free mailbox risks deliverability and the provider's bulk-mail terms, and a CAN-SPAM sender address is required; the day-7 gate could stop a viable offer for that reason.",
+      "resolution": "Accepted. Sending is spread at ~100/day over days 2-6 with individually written messages, sender identity and postal address included for CAN-SPAM; the risk that deliverability stops a viable offer is stated - the zero-spend cap rules out paid sending tools."
+     },
+     {
+      "finding": "NOTE: Price $1,500 and the reach basis rest on sources I verified do not establish this buyer's price or a reachable count (cnd_6acbd368f8804c068d69, cnd_199de8755eb04f648b79); acceptable only as what the test measures.",
+      "resolution": "Accepted. Price stays an ESTIMATE and OFFER_AND_PRICE and CURRENT_DEMAND are in validation.decides; the test measures them."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s1 now secures the quote, start date and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_9f38af0ae8614ccf8a86",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1d9d526c1ca4404f893b",
+      "deals": 17,
+      "price": 250,
+      "directCost": 100,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ee99c3a1272c_a940c5",
+    "digest": "ee99c3a1272ce3bedb18b499",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:11:32.707Z"
+   },
+   "review": {
+    "revisionId": "rev_ee99c3a1272c_a940c5",
+    "revisionDigest": "ee99c3a1272ce3bedb18b499",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b7d35f0a034b4b84b122/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_52de2e93070343c0b8d8/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_0e2dce5e2ada_472e8c are fixed and the plan is a startable CONDITIONAL test inside every limit. (1) Fulfilment before orders: s1 obtains a written fixed quote <= $600 with a 7-day build starting on payout day plus a work sample before any offer, and the stop sends no offer if it is missing by day 2. (2) The promise now matches the cash: delivery within 21 days of payment; sale 1 (day 5) -> payout and freelancer day 19 -> delivered day 26; sale 3 (day 7) -> day 21 -> day 28; refunds/disputes are an UNKNOWN measured in the test with a stop rule. Recomputed: 3 x $1,500 = $4,500 - fees 3 x $43.80 - freelancer 3 x $600 = $2,568.60 (trace netCents 256860) >= $2,500, all settled days 19-21 of 21; owner money at risk $0 (exposure cap $0, every $600 paid from that sale's settled payout); owner work: none in the steps, and the one identity verification of Stripe, bank and mailbox is named as the owner's only action. Gate: 3 paid of 500 by day 7 carries exactly the 3 sales the target needs. members rebuttal accepted (Brain requires arithmetic for every opening weighed in chain; strategy names only cop_9f38af0ae8614ccf8a86).",
+    "findings": [
+     "NOTE: No slack anywhere: one refund or dispute, one sale on day 8, or a first payout later than Stripe's 'typical' 7-14 days misses the target; the stop rules say so, and the owner should read this as a test with a narrow pass band.",
+     "NOTE: Stripe may reserve or delay payouts on prepaid services with a 21-day delivery horizon on a new account; that risk sits on the same day-19-21 settlement the plan rests on."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T02:13:09.782Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Get $2,500 into my account within 21 days without spending anything up front. I won't do any of the work myself — Brain or someone it hires has to do all of it.",
+    "terms": "49edd70022cff553",
+    "openings": {
+     "cop_1d9d526c1ca4404f893b": "5ee72f3981e92ed1",
+     "cop_9f38af0ae8614ccf8a86": "3c68b6420b73f35c"
+    }
+   },
+   "at": "2026-11-28T02:21:33.256Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

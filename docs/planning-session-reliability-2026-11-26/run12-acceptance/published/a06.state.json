@@ -1,0 +1,2417 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_b0adc08b405b4285bedf",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,000 of settled cash in the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "39866b1e11bb8fc64197806c"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_b0adc08b405b4285bedf",
+    "contractDigest": "39866b1e11bb8fc64197806c",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the dead-stock and reorder-point analysis at $350, then scale through the cooperative directory",
+     "opportunityIds": [
+      "cop_d0918094b662488ba611"
+     ],
+     "why": "Buyer, channel, demand, volume (380 directory stores), conversion (18 of 200 on this offer), fulfilment (Brain produces the spreadsheet), economics ($5 cost, $0 tied up) and settlement (3 days) are on the card as evidence. The one unestablished link is the price: $350 is only the owner's statement (PERSON, 2026-11-26), not something any buyer has paid. Ten paid orders at $350 ($3,500) reach the $3,000 target; a first offer round to 100 stores measures whether buyers pay $350 before the rest of the directory is offered."
+    },
+    "alternatives": [
+     {
+      "title": "Treat the $350 owner statement as the price and plan as EXECUTABLE",
+      "why": "Rejected: a price somebody only said is not evidence; no agreement or payment at $350 is recorded."
+     },
+     {
+      "title": "Research published prices for inventory analyses first",
+      "why": "A published range for other consultants would not show what these stores pay for this offer; a live offer measures it directly at $0 capital."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 100 stores from the cooperative member directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Offer the analysis at $350, paid on delivery; record each paid order or refusal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price_person",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for each paid test order (5 expected) within 3 days",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 4,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered test analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "If the proof passed: offer at $350 to the remaining 280 directory stores",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for 5 further paid orders",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 11,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 4,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 test analyses",
+      "stepId": "s3"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 analyses",
+      "stepId": "s6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 1",
+      "settlesDay": 4,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 2",
+      "settlesDay": 4,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 3",
+      "settlesDay": 4,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 4",
+      "settlesDay": 4,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 5",
+      "settlesDay": 4,
+      "stepId": "s4"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 6",
+      "settlesDay": 11,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 7",
+      "settlesDay": 11,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 8",
+      "settlesDay": 11,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 9",
+      "settlesDay": 11,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 10",
+      "settlesDay": 11,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Paid orders at $350 from directory stores (the $350 is the owner's statement only)"
+     },
+     {
+      "name": "test price offered",
+      "status": "ASSUMED",
+      "value": 35000,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Confirmed by paid test orders"
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable stores",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "stores",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "deals",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Holds only if the price is $350"
+     },
+     {
+      "name": "direct cost per analysis",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_person",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says hardware store owners would pay $350 (owner's statement, 2026-11-26) — a PERSON fact, not evidence",
+      "population": "the owner's opinion",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 agreements from 200 contacts on this offer",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The cooperative's member directory lists 380 independent hardware stores, each with a published email",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published store emails in the regional hardware cooperative's member directory",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $5 per analysis; exposure $0",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     }
+    ],
+    "validation": {
+     "proof": "At least 5 paid orders at $350 from the first 100 stores contacted, settled by day 7",
+     "stop": [
+      "Fewer than 2 paid orders at $350 from the first 100 contacts by day 7: stop; $350 is not a price these buyers pay"
+     ],
+     "continue": [
+      "5 or more paid orders at $350 from the first 100 contacts by day 7: offer the remaining 280 directory stores at $350"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "deals": 10,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 11
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_9b6f1cb6af77_5ea100",
+    "digest": "9b6f1cb6af77652cf1dd2ce0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:18.939Z"
+   },
+   {
+    "goalId": "wst_b0adc08b405b4285bedf",
+    "contractDigest": "39866b1e11bb8fc64197806c",
+    "parentRevisionId": "rev_9b6f1cb6af77_5ea100",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the dead-stock and reorder-point analysis at $350, then scale through the cooperative directory",
+     "opportunityIds": [
+      "cop_d0918094b662488ba611"
+     ],
+     "why": "Buyer, channel, demand, volume (380 directory stores), conversion (18 of 200 on this offer), fulfilment (Brain produces the spreadsheet), economics ($5 cost, $0 tied up) and settlement (3 days) are on the card as evidence. The one unestablished link is the price: $350 is only the owner's statement (PERSON, 2026-11-26), not something any buyer has paid. Ten paid orders at $350 ($3,500) reach the $3,000 target; a first offer round to 100 stores measures whether buyers pay $350 before the rest of the directory is offered."
+    },
+    "alternatives": [
+     {
+      "title": "Treat the $350 owner statement as the price and plan as EXECUTABLE",
+      "why": "Rejected: a price somebody only said is not evidence; no agreement or payment at $350 is recorded."
+     },
+     {
+      "title": "Research published prices for inventory analyses first",
+      "why": "A published range for other consultants would not show what these stores pay for this offer; a live offer measures it directly at $0 capital."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Connect the sending and invoicing capabilities, then email the first 100 stores from the cooperative member directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Offer the analysis at $350, paid on delivery; record each paid order or refusal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price_person",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for each paid test order (5 planned; 9 expected at the 9% rate) within 3 days",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 4,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered test analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "If the proof passed: offer at $350 to the remaining 280 directory stores",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for 5 further paid orders",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 11,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 test analyses, paid from settled receipts (card: $0 tied up)",
+      "stepId": "s3"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 analyses, paid from settled receipts",
+      "stepId": "s6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 1",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 2",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 3",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 4",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 5",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 6",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 7",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 8",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 9",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 10",
+      "settlesDay": 14,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Paid orders at $350 from directory stores (the $350 is the owner's statement only)"
+     },
+     {
+      "name": "test price offered",
+      "status": "ASSUMED",
+      "value": 35000,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Confirmed by paid test orders"
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable stores",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "stores",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "deals",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Holds only if the price is $350"
+     },
+     {
+      "name": "direct cost per analysis",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_person",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says hardware store owners would pay $350 (owner's statement, 2026-11-26) — a PERSON fact, not evidence",
+      "population": "the owner's opinion",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 agreements from 200 contacts on this offer",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The cooperative's member directory lists 380 independent hardware stores, each with a published email",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published store emails in the regional hardware cooperative's member directory",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $5 per analysis; exposure $0",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid orders at $350 from the first 100 stores contacted, settled by day 8 (delivered day 4, 3 days to usable cash)",
+     "stop": [
+      "2 or fewer paid orders at $350 from the first 100 contacts by day 8: stop; at 2% the remaining 280 stores yield about 7.6 orders in total ($2,660), short of $3,000, so $350 is not a price that carries the target"
+     ],
+     "continue": [
+      "3 or more paid orders at $350 from the first 100 contacts by day 8: offer the remaining 280 directory stores at $350 (at 3%, about 8 more orders, 11 x $350 = $3,850)"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed at the evidenced 9% close rate: 10 orders x $350 = $3,500 gross, net $3,450; 380 stores is ample volume.",
+      "resolution": "Agreed; no change needed."
+     },
+     {
+      "finding": "Threshold check: proof at 5 of 100 carries the target with the remaining 280 stores.",
+      "resolution": "Agreed; the proof threshold is now lowered to 3 of 100, which the arithmetic shows still carries the target."
+     },
+     {
+      "finding": "Gap: outcomes of 2-4 paid orders have neither stop nor continue.",
+      "resolution": "Accepted. Continue at 3 or more paid of 100 (3% -> ~11 orders, $3,850); stop at 2 or fewer (2% -> ~7.6 orders, $2,660). No gap remains."
+     },
+     {
+      "finding": "Ledger settles receipts on the collection day despite the card's 3 days to usable cash.",
+      "resolution": "Accepted. Test receipts settle day 7, second-batch receipts day 14; proofDay moved to day 8; member settlesDay 14; direct costs paid from settled receipts so nothing is tied up."
+     },
+     {
+      "finding": "Conversion 18/200 does not state its price, so it does not confirm $350.",
+      "resolution": "Agreed; price stays UNKNOWN and is what the test decides (OFFER_AND_PRICE)."
+     },
+     {
+      "finding": "Executor SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+      "resolution": "Accepted: step s1 now connects sending and invoicing before the first email on day 0."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "deals": 10,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_59c7feb543d9_afe5a7",
+    "digest": "59c7feb543d928c36b96ea00",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:02.262Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_b0adc08b405b4285bedf",
+   "contractDigest": "39866b1e11bb8fc64197806c",
+   "parentRevisionId": "rev_9b6f1cb6af77_5ea100",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test-sell the dead-stock and reorder-point analysis at $350, then scale through the cooperative directory",
+    "opportunityIds": [
+     "cop_d0918094b662488ba611"
+    ],
+    "why": "Buyer, channel, demand, volume (380 directory stores), conversion (18 of 200 on this offer), fulfilment (Brain produces the spreadsheet), economics ($5 cost, $0 tied up) and settlement (3 days) are on the card as evidence. The one unestablished link is the price: $350 is only the owner's statement (PERSON, 2026-11-26), not something any buyer has paid. Ten paid orders at $350 ($3,500) reach the $3,000 target; a first offer round to 100 stores measures whether buyers pay $350 before the rest of the directory is offered."
+   },
+   "alternatives": [
+    {
+     "title": "Treat the $350 owner statement as the price and plan as EXECUTABLE",
+     "why": "Rejected: a price somebody only said is not evidence; no agreement or payment at $350 is recorded."
+    },
+    {
+     "title": "Research published prices for inventory analyses first",
+     "why": "A published range for other consultants would not show what these stores pay for this offer; a live offer measures it directly at $0 capital."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Connect the sending and invoicing capabilities, then email the first 100 stores from the cooperative member directory",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src_reach",
+      "src_volume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "TEST",
+     "label": "Offer the analysis at $350, paid on delivery; record each paid order or refusal",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_price_person",
+      "src_conv"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the analysis for each paid test order (5 planned; 9 expected at the 9% rate) within 3 days",
+     "performer": "BRAIN",
+     "costCents": 2500,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Collect $350 per delivered test analysis",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "src_settle"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "If the proof passed: offer at $350 to the remaining 280 directory stores",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s4",
+     "evidence": [
+      "src_volume",
+      "src_conv"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the analysis for 5 further paid orders",
+     "performer": "BRAIN",
+     "costCents": 2500,
+     "day": 11,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Collect $350 per delivered analysis",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 11,
+     "dependsOn": "s6",
+     "evidence": [
+      "src_settle"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Direct cost $5 x 5 test analyses, paid from settled receipts (card: $0 tied up)",
+     "stepId": "s3"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Direct cost $5 x 5 analyses, paid from settled receipts",
+     "stepId": "s6"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Test order 1",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Test order 2",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Test order 3",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Test order 4",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Test order 5",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Order 6",
+     "settlesDay": 14,
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Order 7",
+     "settlesDay": 14,
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Order 8",
+     "settlesDay": 14,
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Order 9",
+     "settlesDay": 14,
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 35000,
+     "label": "Order 10",
+     "settlesDay": 14,
+     "stepId": "s7"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [
+      "src_price_person"
+     ],
+     "needs": "Paid orders at $350 from directory stores (the $350 is the owner's statement only)"
+    },
+    {
+     "name": "test price offered",
+     "status": "ASSUMED",
+     "value": 35000,
+     "unit": "cents",
+     "sources": [
+      "src_price_person"
+     ],
+     "needs": "Confirmed by paid test orders"
+    },
+    {
+     "name": "close rate",
+     "status": "EVIDENCED",
+     "value": 0.09,
+     "unit": "agreements per contact",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable stores",
+     "status": "EVIDENCED",
+     "value": 380,
+     "unit": "stores",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 10,
+     "unit": "deals",
+     "sources": [
+      "src_price_person"
+     ],
+     "needs": "Holds only if the price is $350"
+    },
+    {
+     "name": "direct cost per analysis",
+     "status": "EVIDENCED",
+     "value": 500,
+     "unit": "cents",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_settle"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price_person",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#price",
+     "dated": "2026-11-25",
+     "claim": "The owner says hardware store owners would pay $350 (owner's statement, 2026-11-26) — a PERSON fact, not evidence",
+     "population": "the owner's opinion",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "18 agreements from 200 contacts on this offer",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The cooperative's member directory lists 380 independent hardware stores, each with a published email",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_reach",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#reachableChannel",
+     "dated": "2026-11-25",
+     "claim": "Published store emails in the regional hardware cooperative's member directory",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#delivery",
+     "dated": "2026-11-25",
+     "claim": "A spreadsheet Brain produces",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct cost $5 per analysis; exposure $0",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    },
+    {
+     "id": "src_settle",
+     "url": "https://brain.local/card/cop_d0918094b662488ba611#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "3 days to first cash",
+     "population": "380 independent hardware stores in the regional cooperative's member directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d0918094b662488ba611"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 paid orders at $350 from the first 100 stores contacted, settled by day 8 (delivered day 4, 3 days to usable cash)",
+    "stop": [
+     "2 or fewer paid orders at $350 from the first 100 contacts by day 8: stop; at 2% the remaining 280 stores yield about 7.6 orders in total ($2,660), short of $3,000, so $350 is not a price that carries the target"
+    ],
+    "continue": [
+     "3 or more paid orders at $350 from the first 100 contacts by day 8: offer the remaining 280 directory stores at $350 (at 3%, about 8 more orders, 11 x $350 = $3,850)"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed at the evidenced 9% close rate: 10 orders x $350 = $3,500 gross, net $3,450; 380 stores is ample volume.",
+     "resolution": "Agreed; no change needed."
+    },
+    {
+     "finding": "Threshold check: proof at 5 of 100 carries the target with the remaining 280 stores.",
+     "resolution": "Agreed; the proof threshold is now lowered to 3 of 100, which the arithmetic shows still carries the target."
+    },
+    {
+     "finding": "Gap: outcomes of 2-4 paid orders have neither stop nor continue.",
+     "resolution": "Accepted. Continue at 3 or more paid of 100 (3% -> ~11 orders, $3,850); stop at 2 or fewer (2% -> ~7.6 orders, $2,660). No gap remains."
+    },
+    {
+     "finding": "Ledger settles receipts on the collection day despite the card's 3 days to usable cash.",
+     "resolution": "Accepted. Test receipts settle day 7, second-batch receipts day 14; proofDay moved to day 8; member settlesDay 14; direct costs paid from settled receipts so nothing is tied up."
+    },
+    {
+     "finding": "Conversion 18/200 does not state its price, so it does not confirm $350.",
+     "resolution": "Agreed; price stays UNKNOWN and is what the test decides (OFFER_AND_PRICE)."
+    },
+    {
+     "finding": "Executor SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+     "resolution": "Accepted: step s1 now connects sending and invoicing before the first email on day 0."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_d0918094b662488ba611",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_d0918094b662488ba611",
+     "deals": 10,
+     "price": 350,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 14
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_59c7feb543d9_afe5a7",
+   "digest": "59c7feb543d928c36b96ea00",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:45:02.262Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_59c7feb543d9_afe5a7",
+   "digest": "59c7feb543d928c36b96ea00",
+   "contractDigest": "39866b1e11bb8fc64197806c",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 5000,
+    "committedOpenCents": 0,
+    "preProofCents": 2500,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 4,
+    "collectedCents": 350000,
+    "collectedInWindowCents": 350000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 345000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 29325× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Dead-stock and reorder-point analysis for independent hardwa\" needs [figure withheld] and keeps [figure withheld], 345× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Independent hardware store owners\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_d0918094b662488ba611"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Independent hardware store owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Independent hardware store owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 52.83561954796369
+     },
+     {
+      "label": "Collect payment for \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "title": "Dead-stock and reorder-point analysis for independent hardware stores",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Independent hardware store owners",
+       "reachableChannel": "Published store emails in the regional hardware cooperative's member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:33.649Z",
+       "offerScope": "An analysis of the store's point-of-sale export naming dead stock and reorder points; delivered in 3 days.",
+       "priceCents": 35000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "independent hardware stores",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published store emails in the regional hardware cooperative's member directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 18 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "10 deal(s) needed, 1520 available in the window (380 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The cooperative's member directory lists 380 independent hardware stores, each with a published email; each reorders stock every week.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell An analysis of the store's point-of-sale export naming dead stock and reorder points; delivered in 3 days. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "18 agreements from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent hardware store owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The owner says hardware store owners would pay $350 for the analysis (owner's statement, 2026-11-26).",
+        "kind": "PERSON"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:37:13.737Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_9b6f1cb6af77_5ea100",
+    "revisionDigest": "9b6f1cb6af77652cf1dd2ce0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3cd4d8b0f4e24bf89b22/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The stance is right: CONDITIONAL on OFFER_AND_PRICE, because $350 is only the owner's statement (PERSON) and no agreement is recorded; every other link is evidenced, fulfilment (Brain-produced spreadsheet) is proved before orders are taken, and passing the proof at its threshold carries the target (5 paid of 100 = 5% -> 5 + 0.05 x 280 = 19 orders x $350 = $6,650 >= $3,000, at $0 capital). Two defects keep it from being actionable as written: (1) the decision rule leaves a gap - stop below 2 paid orders, continue at 5 or more, nothing for 2-4. At 3 paid (3%) the remaining 280 stores yield ~8 more, 11 x $350 = $3,850, which still reaches the target; at 2 (2%) ~7.6 total, $2,660, does not. The rule should be continue at >= 3 (or state what 2-4 means). (2) The ledger settles each payment the day it is collected, but the card says 3 days to usable cash and payment is on delivery: test orders delivered day 4 settle about day 7, the second batch offered day 8, delivered day 11, settles about day 14. The window still holds, but proofDay and settlesDay should reflect the 3-day lag, and the proof 'settled by day 7' is then on the edge.",
+    "findings": [
+     "Recomputed at the evidenced 9% close rate: 100 contacts -> 9 orders; 10 orders x $350 = $3,500 gross, $50 direct cost, net $3,450; 380 stores (weekly buyers) is ample volume.",
+     "Threshold check: proof at 5 of 100 (5%) carries the target with the remaining 280 stores (19 orders, $6,650).",
+     "Gap: outcomes of 2-4 paid orders have neither stop nor continue; 3 or 4 paid still reach the target, 2 does not.",
+     "Ledger settles receipts on the collection day despite the card's 3 days to usable cash; shift settlesDay (day 7 and ~day 14) and proofDay accordingly.",
+     "Conversion 18/200 is on this offer but its price is not stated, so it does not confirm $350; the plan correctly treats price as the unknown the test decides (validation.decides OFFER_AND_PRICE).",
+     "Executor SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before day 0."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:42:39.230Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_59c7feb543d9_afe5a7",
+    "revisionDigest": "59c7feb543d928c36b96ea00",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3cd4d8b0f4e24bf89b22/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both defects are fixed and the plan is actionable. CONDITIONAL on OFFER_AND_PRICE is right ($350 is only the owner's statement; no agreement recorded). The decision rule now covers every outcome: continue at >= 3 paid of 100, stop at <= 2. Threshold check: 3% -> 3 + 0.03 x 280 = ~11.4 orders, 11 x $350 = $3,850 >= $3,000; 2% -> ~7.6 orders, $2,660 < $3,000, so the cut is in the right place. The ledger now honours the 3-day settlement (test receipts day 7, second batch day 14), proof day 8, and direct costs ($5 each, $50 total) are paid from settled receipts, so no capital. Fulfilment is a Brain-produced spreadsheet (proved) before any order is taken. Volume (380 weekly-reordering stores) is ample.",
+    "findings": [
+     "Recomputed: 10 x $350 = $3,500 gross, $50 cost, net $3,450; second batch offered day 8, delivered by day 11, settled by day 14 of 30.",
+     "At the threshold (3%) the margin is ~$850 over target; at the evidenced 9% it is much wider.",
+     "Payment is on delivery, so a buyer can decline after delivery; the $5 cost bounds that loss and the test counts only paid orders, which is correct.",
+     "Sending and invoicing are to be connected in s1 before the first email (SEND_A_MESSAGE / ISSUE_AN_INVOICE currently NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:45.277Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_59c7feb543d9_afe5a7",
+   "digest": "59c7feb543d928c36b96ea00",
+   "contractDigest": "39866b1e11bb8fc64197806c",
+   "plan": {
+    "goalId": "wst_b0adc08b405b4285bedf",
+    "contractDigest": "39866b1e11bb8fc64197806c",
+    "parentRevisionId": "rev_9b6f1cb6af77_5ea100",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the dead-stock and reorder-point analysis at $350, then scale through the cooperative directory",
+     "opportunityIds": [
+      "cop_d0918094b662488ba611"
+     ],
+     "why": "Buyer, channel, demand, volume (380 directory stores), conversion (18 of 200 on this offer), fulfilment (Brain produces the spreadsheet), economics ($5 cost, $0 tied up) and settlement (3 days) are on the card as evidence. The one unestablished link is the price: $350 is only the owner's statement (PERSON, 2026-11-26), not something any buyer has paid. Ten paid orders at $350 ($3,500) reach the $3,000 target; a first offer round to 100 stores measures whether buyers pay $350 before the rest of the directory is offered."
+    },
+    "alternatives": [
+     {
+      "title": "Treat the $350 owner statement as the price and plan as EXECUTABLE",
+      "why": "Rejected: a price somebody only said is not evidence; no agreement or payment at $350 is recorded."
+     },
+     {
+      "title": "Research published prices for inventory analyses first",
+      "why": "A published range for other consultants would not show what these stores pay for this offer; a live offer measures it directly at $0 capital."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Connect the sending and invoicing capabilities, then email the first 100 stores from the cooperative member directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Offer the analysis at $350, paid on delivery; record each paid order or refusal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price_person",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for each paid test order (5 planned; 9 expected at the 9% rate) within 3 days",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 4,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered test analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "If the proof passed: offer at $350 to the remaining 280 directory stores",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the analysis for 5 further paid orders",
+      "performer": "BRAIN",
+      "costCents": 2500,
+      "day": 11,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect $350 per delivered analysis",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 test analyses, paid from settled receipts (card: $0 tied up)",
+      "stepId": "s3"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Direct cost $5 x 5 analyses, paid from settled receipts",
+      "stepId": "s6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 1",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 2",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 3",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 4",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Test order 5",
+      "settlesDay": 7,
+      "stepId": "s4"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 6",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 7",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 8",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 9",
+      "settlesDay": 14,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 35000,
+      "label": "Order 10",
+      "settlesDay": 14,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Paid orders at $350 from directory stores (the $350 is the owner's statement only)"
+     },
+     {
+      "name": "test price offered",
+      "status": "ASSUMED",
+      "value": 35000,
+      "unit": "cents",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Confirmed by paid test orders"
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable stores",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "stores",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "deals",
+      "sources": [
+       "src_price_person"
+      ],
+      "needs": "Holds only if the price is $350"
+     },
+     {
+      "name": "direct cost per analysis",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_person",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says hardware store owners would pay $350 (owner's statement, 2026-11-26) — a PERSON fact, not evidence",
+      "population": "the owner's opinion",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 agreements from 200 contacts on this offer",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The cooperative's member directory lists 380 independent hardware stores, each with a published email",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published store emails in the regional hardware cooperative's member directory",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $5 per analysis; exposure $0",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_d0918094b662488ba611#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "380 independent hardware stores in the regional cooperative's member directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d0918094b662488ba611"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid orders at $350 from the first 100 stores contacted, settled by day 8 (delivered day 4, 3 days to usable cash)",
+     "stop": [
+      "2 or fewer paid orders at $350 from the first 100 contacts by day 8: stop; at 2% the remaining 280 stores yield about 7.6 orders in total ($2,660), short of $3,000, so $350 is not a price that carries the target"
+     ],
+     "continue": [
+      "3 or more paid orders at $350 from the first 100 contacts by day 8: offer the remaining 280 directory stores at $350 (at 3%, about 8 more orders, 11 x $350 = $3,850)"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed at the evidenced 9% close rate: 10 orders x $350 = $3,500 gross, net $3,450; 380 stores is ample volume.",
+      "resolution": "Agreed; no change needed."
+     },
+     {
+      "finding": "Threshold check: proof at 5 of 100 carries the target with the remaining 280 stores.",
+      "resolution": "Agreed; the proof threshold is now lowered to 3 of 100, which the arithmetic shows still carries the target."
+     },
+     {
+      "finding": "Gap: outcomes of 2-4 paid orders have neither stop nor continue.",
+      "resolution": "Accepted. Continue at 3 or more paid of 100 (3% -> ~11 orders, $3,850); stop at 2 or fewer (2% -> ~7.6 orders, $2,660). No gap remains."
+     },
+     {
+      "finding": "Ledger settles receipts on the collection day despite the card's 3 days to usable cash.",
+      "resolution": "Accepted. Test receipts settle day 7, second-batch receipts day 14; proofDay moved to day 8; member settlesDay 14; direct costs paid from settled receipts so nothing is tied up."
+     },
+     {
+      "finding": "Conversion 18/200 does not state its price, so it does not confirm $350.",
+      "resolution": "Agreed; price stays UNKNOWN and is what the test decides (OFFER_AND_PRICE)."
+     },
+     {
+      "finding": "Executor SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+      "resolution": "Accepted: step s1 now connects sending and invoicing before the first email on day 0."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_d0918094b662488ba611",
+      "deals": 10,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_59c7feb543d9_afe5a7",
+    "digest": "59c7feb543d928c36b96ea00",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:02.262Z"
+   },
+   "review": {
+    "revisionId": "rev_59c7feb543d9_afe5a7",
+    "revisionDigest": "59c7feb543d928c36b96ea00",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dee9a5281fb84ccb9f90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3cd4d8b0f4e24bf89b22/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both defects are fixed and the plan is actionable. CONDITIONAL on OFFER_AND_PRICE is right ($350 is only the owner's statement; no agreement recorded). The decision rule now covers every outcome: continue at >= 3 paid of 100, stop at <= 2. Threshold check: 3% -> 3 + 0.03 x 280 = ~11.4 orders, 11 x $350 = $3,850 >= $3,000; 2% -> ~7.6 orders, $2,660 < $3,000, so the cut is in the right place. The ledger now honours the 3-day settlement (test receipts day 7, second batch day 14), proof day 8, and direct costs ($5 each, $50 total) are paid from settled receipts, so no capital. Fulfilment is a Brain-produced spreadsheet (proved) before any order is taken. Volume (380 weekly-reordering stores) is ample.",
+    "findings": [
+     "Recomputed: 10 x $350 = $3,500 gross, $50 cost, net $3,450; second batch offered day 8, delivered by day 11, settled by day 14 of 30.",
+     "At the threshold (3%) the margin is ~$850 over target; at the evidenced 9% it is much wider.",
+     "Payment is on delivery, so a buyer can decline after delivery; the $5 cost bounds that loss and the test counts only paid orders, which is correct.",
+     "Sending and invoicing are to be connected in s1 before the first email (SEND_A_MESSAGE / ISSUE_AN_INVOICE currently NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:45.277Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_d0918094b662488ba611": "230321a4feffcc25"
+    }
+   },
+   "at": "2026-11-28T01:47:11.934Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

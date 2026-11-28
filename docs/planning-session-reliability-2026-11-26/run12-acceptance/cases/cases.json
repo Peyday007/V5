@@ -1,0 +1,746 @@
+[
+  {
+    "id": "ap-01-bike-shop-service-workbook",
+    "heldOut": true,
+    "description": "Two openings, one sound. The service-pricing workbook: the state dealers' association directory counts 420 bike shops with published emails (this seller's own reachable list); this seller's own outreach measured 27 agreements from 300 contacts (9%). 420 × 9% ≈ 37 sales × $180 = $6,660 against $2,500; $2,500 needs 14 sales (≈156 contacts), Brain produces it at $4, paid by card and usable 3 days after each sale, so sales made by day 27 settle by day 30. Nothing tied up. The e-bike lead list has a sourced $99 price and a measured rate but its volume is only Brain's estimate, so it establishes nothing and may not carry the plan. Executable on the workbook alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent bicycle retail",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "serviceWorkbook",
+        "title": "Winter service-menu repricing and repair-queue workbook for independent bike shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent bicycle retail",
+        "payer": "Independent bike shop owners and service managers",
+        "channel": "Published service-desk emails in the state bicycle dealers' association directory",
+        "offer": "A workbook built from the shop's own service tickets; delivered in 2 days; paid by card at checkout.",
+        "price": 180,
+        "priceEvidence": "Comparable shop-operations workbooks for bicycle retailers sell for $180 on the dealers' association member marketplace (listing prices, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The state bicycle dealers' association directory lists 420 independent bike shops, each with a published service-desk email; each reprices its service menu every winter.",
+        "conversion": {
+          "paid": 27,
+          "of": 300,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "ebikeLeads",
+        "title": "Weekly e-bike buyer lead lists for bike shops",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "independent bicycle retail",
+        "payer": "Independent bike shop owners",
+        "channel": "Published shop emails",
+        "price": 99,
+        "priceEvidence": "Regional retail lead lists sell for $99 a week (lead-broker rate card, 2026-10).",
+        "cost": 1,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "Brain estimates bike shops in the region would buy e-bike lead lists every week.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 10,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "ebikeLeads"
+      ]
+    }
+  },
+  {
+    "id": "ap-02-drywall-takeoffs-net",
+    "heldOut": true,
+    "description": "A net objective: $3,000 KEPT after direct costs. Six residential drywall contractors signed at $900 a takeoff; SheetCount quotes $350, so each keeps $550: 6 × $550 = $3,300 ≥ $3,000 (4 takeoffs would reach $3,000 gross but keep only $2,200 — a gross reading is unsound). Calendar: SheetCount delivers two a week — days 5, 12, 19; each contractor pays within 7 days of delivery — days 12, 19, 26; SheetCount invoices net 10 after delivery (due days 15, 22, 29), every supplier payment after the client cash for the same pair, so nothing is tied up and all cash settles by day 29 ≤ 30. The hanging-crew opening has two signatures but nobody is established to hang the board; it may not be used. Executable on the takeoffs.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "residential drywall contracting",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $3,000 of net cash — after every direct cost — settled within 30 days, using no up-front capital.",
+    "openings": [
+      {
+        "key": "takeoffs",
+        "title": "Subcontracted material takeoffs for residential drywall contractors",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "residential drywall contracting",
+        "payer": "Owners of residential drywall contracting firms",
+        "channel": "The six contractors who signed, by email",
+        "offer": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "price": 900,
+        "priceEvidence": "Six drywall contractors signed written orders at $900 per takeoff (signed orders, 2026-11-20).",
+        "cost": 350,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs a week, on days 5, 12 and 19 of the window; invoices us net 10 after each delivery)",
+        "agreements": [
+          900,
+          900,
+          900,
+          900,
+          900,
+          900
+        ]
+      },
+      {
+        "key": "hanging",
+        "title": "Overflow drywall hanging for general contractors",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "residential drywall contracting",
+        "payer": "General contractors with overflow framing jobs",
+        "channel": "The two contractors who signed, by email",
+        "price": 4200,
+        "priceEvidence": "Two general contractors signed written orders at $4,200 per overflow hanging job (signed orders, 2026-11-21).",
+        "cost": 3000,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 2,
+        "performer": "NOBODY",
+        "agreements": [
+          4200,
+          4200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "hanging"
+      ]
+    }
+  },
+  {
+    "id": "ap-03-cinema-supplier-cost-rises",
+    "heldOut": true,
+    "description": "Adaptation. Before the change both openings are sound: five cinemas signed $650 projector visits subcontracted at $300 (5 × $650 = $3,250 ≥ $3,000; LumenTech does all five in the first two weeks and invoices net 15, cinemas pay within 10 days), and the film-settlement workbook (alliance directory counts 310 cinemas with booking contacts; own outreach measured 24 agreements from 200 contacts = 12%; 310 × 12% ≈ 37 × $240 = $8,880; $3,000 needs 13 sales, paid in 3 days, Brain produces it at $5). Then LumenTech requotes $700 a visit — above the $650 price — so the projector opening loses money and may not be used. The workbook alone still carries $3,000. Executable after the change, without the projector visits.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent cinemas",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "projector",
+        "title": "Subcontracted digital-projector lamp and filter service for independent cinemas",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "independent cinemas",
+        "payer": "Independent cinema general managers",
+        "channel": "The five managers who signed, by email",
+        "offer": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+        "price": 650,
+        "priceEvidence": "Five independent cinemas signed written orders at $650 per projector service visit (signed orders, 2026-11-18).",
+        "cost": 300,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "LumenTech Field Service (written quote $300 per visit; completes all five visits in the first 14 days; invoices us net 15)",
+        "agreements": [
+          650,
+          650,
+          650,
+          650,
+          650
+        ]
+      },
+      {
+        "key": "settlementWorkbook",
+        "title": "Film-rental settlement reconciliation workbook for independent cinemas",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent cinemas",
+        "payer": "Independent cinema owners and film bookers",
+        "channel": "Published booking-contact emails in the independent-cinema alliance member directory",
+        "offer": "A workbook reconciling distributor settlements against box-office reports; delivered in 2 days; paid by card at checkout.",
+        "price": 240,
+        "priceEvidence": "Comparable film-settlement workbooks sell for $240 on the alliance's member resource store (listing prices, 2026-11).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The independent-cinema alliance directory lists 310 member cinemas, each with a published booking contact; each settles film rentals with distributors every week.",
+        "conversion": {
+          "paid": 24,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "SUPPLIER_COST",
+          "opening": "projector",
+          "cost": 700
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "projector"
+      ]
+    }
+  },
+  {
+    "id": "ap-04-dive-shop-owner-hours",
+    "heldOut": true,
+    "description": "4 owner hours a week over 28 days = 16 owner hours. The owner-led inspection days take 8 owner hours each: all four signed ($2,400) would take 32 hours, so at most two fit ($1,200, short of $2,000). The air-quality log workbook needs no owner time: the certification agency's locator counts 260 dive shops with published emails; own outreach measured 30 agreements from 250 contacts (12%); 260 × 12% ≈ 31 × $220 = $6,820; $2,000 needs 10 sales, paid in 3 days, Brain produces it at $4. Executable inside the hours — on the workbook alone or with at most two inspection days.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "recreational scuba diving",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $2,000 of settled cash within 28 days with no more than 4 hours a week of my own time.",
+    "openings": [
+      {
+        "key": "inspectionDays",
+        "title": "Owner-led regulator and tank visual-inspection days at dive shops",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "recreational scuba diving",
+        "payer": "Dive shop owners",
+        "channel": "The four shop owners who signed, by phone and email",
+        "offer": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+        "price": 600,
+        "priceEvidence": "Four dive shops signed written orders at $600 per on-site inspection day (signed orders, 2026-11-19).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          600,
+          600,
+          600,
+          600
+        ]
+      },
+      {
+        "key": "airLog",
+        "title": "Breathing-air quality and tank-inspection compliance log workbook for dive shops",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "recreational scuba diving",
+        "payer": "Dive shop owners and compressor managers",
+        "channel": "Published shop emails in the certification agency's public dive-center locator",
+        "offer": "A quarterly air-test and tank-visual log workbook; delivered in 2 days; paid by card at checkout.",
+        "price": 220,
+        "priceEvidence": "Comparable dive-center compliance log workbooks sell for $220 on the agency's retailer resource store (listing prices, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The certification agency's public dive-center locator lists 260 dive shops in the region, each with a published email; each must keep its breathing-air test and tank-visual log current every quarter.",
+        "conversion": {
+          "paid": 30,
+          "of": 250,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 16
+    }
+  },
+  {
+    "id": "ap-05-farmers-market-ledgers-short",
+    "heldOut": true,
+    "description": "Short deadline and a $200 capital limit. Four farmers' market associations signed at $400 a ledger workbook Brain produces at $8: $1,600 ≥ $1,500. Calendar: delivered within 3 days of the start, paid by card on delivery and usable 2 days later — all cash by day 5 ≤ 10. The canopy resale has a signed $9,000 buyer but ties up $6,500 in stock against the $200 limit and nothing shows the buyer prepays, so it may not be used. Executable on the ledgers.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "farmers' market associations",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $1,500 of settled cash within 10 days with at most $200 of capital.",
+    "openings": [
+      {
+        "key": "stallLedger",
+        "title": "Stall-assignment and vendor-fee ledger workbook for farmers' market associations",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "farmers' market associations",
+        "payer": "Farmers' market managers",
+        "channel": "The four market managers who signed, by email",
+        "offer": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+        "price": 400,
+        "priceEvidence": "Four farmers' market associations signed written orders at $400 per ledger workbook (signed orders, 2026-11-25).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0,
+        "performer": "BRAIN",
+        "agreements": [
+          400,
+          400,
+          400,
+          400
+        ]
+      },
+      {
+        "key": "canopies",
+        "title": "Bulk resale of commercial pop-up canopies to market vendors",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "farmers' market associations",
+        "payer": "A regional market vendors' buying group",
+        "channel": "The buying group's purchasing lead, by email",
+        "offer": "One pallet lot of 10×10 commercial canopies, paid on delivery.",
+        "price": 9000,
+        "priceEvidence": "A market vendors' buying group signed a $9,000 order for one canopy lot, payable on delivery (signed order, 2026-11-24).",
+        "cost": 6500,
+        "capital": 6500,
+        "daysToCash": 8,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "TentSource Wholesale (quoted $6,500 per lot, freight included, payment with order)",
+        "agreements": [
+          9000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 200,
+      "mustNotUse": [
+        "canopies"
+      ]
+    }
+  },
+  {
+    "id": "ap-06-hardware-price-only-said",
+    "heldOut": true,
+    "description": "Every link evidenced but the price: the regional hardware cooperative's directory counts 380 stores with published emails and own outreach measured 18 agreements from 200 contacts, Brain produces the analysis at $5 and it pays in 3 days — but the $350 is only the owner's statement; no source shows a hardware store paying it. At $350, 9 sales would cover $3,000; at no evidenced price there is no plan. The decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent hardware stores",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "deadStock",
+        "title": "Dead-stock and reorder-point analysis for independent hardware stores",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "independent hardware stores",
+        "payer": "Independent hardware store owners",
+        "channel": "Published store emails in the regional hardware cooperative's member directory",
+        "offer": "An analysis of the store's point-of-sale export naming dead stock and reorder points; delivered in 3 days.",
+        "price": 350,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says hardware store owners would pay $350 for the analysis (owner's statement, 2026-11-26).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The cooperative's member directory lists 380 independent hardware stores, each with a published email; each reorders stock every week.",
+        "conversion": {
+          "paid": 18,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "deadStock"
+      }
+    }
+  },
+  {
+    "id": "ap-07-fire-department-grant-as-price",
+    "heldOut": true,
+    "description": "The $5,000 is the grant the state's Volunteer Fire Assistance program pays a department for equipment — money paid to the department by the state, for something else — not what a department pays for a grant-application package. Reach (540 departments in the fire marshal's registry), a measured rate and Brain's fulfilment are evidenced, but no evidenced purchase price exists, so no plan; counting $5,000 as a sale (one sale meeting $4,000) is the critical error. The decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "volunteer fire departments",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "grantPackage",
+        "title": "Equipment-grant application packages for volunteer fire departments",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "volunteer fire departments",
+        "payer": "Volunteer fire chiefs and department treasurers",
+        "channel": "Published department emails in the state fire marshal's registry",
+        "offer": "A completed equipment-grant application package with the needs narrative and budget; delivered in 5 days.",
+        "price": 5000,
+        "priceEvidence": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases (program notice, 2026-10).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The state fire marshal's registry lists 540 volunteer fire departments, each eligible to apply in the current grant round.",
+        "conversion": {
+          "paid": 14,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "grantPackage"
+      },
+      "notAPurchasePrice": [
+        "grantPackage"
+      ]
+    }
+  },
+  {
+    "id": "ap-08-orchestra-one-purchase-order",
+    "heldOut": true,
+    "description": "One orchestra's development office issued one $4,500 purchase order. Nothing says it buys again or that any other organisation buys, so the most this opening is shown to bring is $4,500 against $12,000; a model that treats the Lakeshore Philharmonic as a population of repeat buyers invents the other $7,500. No plan; the decisive gap is how many deals the market holds.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "symphony orchestras",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "donorCleanup",
+        "title": "Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Philharmonic",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "symphony orchestras",
+        "payer": "The Lakeshore Philharmonic's director of development",
+        "channel": "The orchestra's development office (published email)",
+        "offer": "One deduplicated donor file with lapsed-donor segments; paid net 21 after delivery.",
+        "price": 4500,
+        "priceEvidence": "The Lakeshore Philharmonic's development office issued a $4,500 purchase order for a donor-database cleanup (board-approved purchase order, 2026-11-12).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 25,
+        "hours": 0,
+        "performer": "BRAIN",
+        "agreements": [
+          4500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "payerDealsMax": {
+        "donorCleanup": 1
+      }
+    }
+  },
+  {
+    "id": "ap-09-parks-net45-deadline-cut",
+    "heldOut": true,
+    "description": "Objective change. Three parks departments signed $2,400 playground-inspection reports ($7,200 ≥ $6,000), PlaySafe inspects all three by day 10 at $900 each and invoices net 60, and each city pays net 45 after the report: cash lands on day 55, supplier paid by day 70 — inside the first 75-day window, so the first reading is executable. The owner then cuts the window to 21 days: the earliest usable cash is day 55 (10 days to deliver + net 45), after the deadline, and no other opening exists. Infeasible on the deadline; the settlement timing is the link that carries it.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "SETTLES_IN_TIME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "municipal parks departments",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $6,000 of settled cash within 75 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "playground",
+        "title": "Playground-equipment safety-inspection reports for municipal parks departments",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "municipal parks departments",
+        "payer": "Municipal parks and recreation directors",
+        "channel": "The three directors who signed, by email",
+        "offer": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+        "price": 2400,
+        "priceEvidence": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt (signed purchase orders, 2026-11-20).",
+        "cost": 900,
+        "capital": 0,
+        "daysToCash": 55,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "PlaySafe Inspections (certified playground inspector; written quote $900 per park system; completes all three inspections by day 10; invoices us net 60)",
+        "agreements": [
+          2400,
+          2400,
+          2400
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $6,000 of settled cash within 21 days using no up-front capital."
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ap-10-roaster-price-contradicted",
+    "heldOut": true,
+    "description": "The card prices the traceability workbook at $750, but another source states $75 for it. At $750 the guild's 400 counted roasteries × a measured 10% would bring $30,000; at $75, $3,000 — under the $5,000 target. The plan turns on which is true, so on a contested price no executable plan is established; the price (and with it the economics) is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "specialty coffee roasting",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "roastLog",
+        "title": "Green-coffee lot traceability and roast-loss workbook for specialty roasters",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "specialty coffee roasting",
+        "payer": "Owners and head roasters at small specialty roasteries",
+        "channel": "Published wholesale-inquiry emails in the roasters' guild member directory",
+        "offer": "A lot-traceability and roast-loss workbook; delivered in 2 days; paid by card at checkout.",
+        "price": 750,
+        "priceEvidence": "Comparable roast-loss and traceability workbooks sell for $750 (coffee-consultant listing, 2026-10).",
+        "priceContradiction": 75,
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The roasters' guild directory lists 400 member roasteries, each with a published wholesale email; each logs green-coffee lots with every import.",
+        "conversion": {
+          "paid": 20,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "roastLog"
+      }
+    }
+  },
+  {
+    "id": "ap-11-investigator-market-too-small",
+    "heldOut": true,
+    "description": "$60,000 in 30 days from a counted market: the state licensing board lists 310 private-investigator agencies, each needing one $150 pack. Even if every agency bought, 310 × $150 = $46,500 < $60,000 — the target is out of reach at any conversion (at the measured 11%, about $5,100). Infeasible as stated; the target is the constraint.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "private investigation agencies",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "casePack",
+        "title": "Skip-trace case-file and chain-of-custody template pack for private investigators",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "private investigation agencies",
+        "payer": "Licensed private investigators who run their own agencies",
+        "channel": "Published agency emails in the state licensing board's public licensee search",
+        "offer": "One template pack per agency; delivered at once; paid by card at checkout.",
+        "price": 150,
+        "priceEvidence": "Comparable investigator case-file template packs sell for $150 on the state investigators' association store (listing prices, 2026-11).",
+        "cost": 2,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "The state licensing board's public licensee search lists 310 licensed private-investigator agencies, each with a published email; each needs one pack.",
+        "conversion": {
+          "paid": 33,
+          "of": 300,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ap-12-hotel-audits-owner-hours",
+    "heldOut": true,
+    "description": "Six boutique-hotel general managers signed $500 mystery-guest audits ($3,000 = the target), but the owner performs each one personally at 6 hours. 3 hours a week over 21 days allows 9 owner hours: one audit (6 hours, $500) fits, six need 36 hours. No other opening, and nobody else is established to perform the audits. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "boutique hotels",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $3,000 of settled cash within 21 days with no more than 3 hours a week of my own time.",
+    "openings": [
+      {
+        "key": "mysteryGuest",
+        "title": "Owner-performed mystery-guest service audits for boutique hotels",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "boutique hotels",
+        "payer": "Boutique hotel general managers",
+        "channel": "The six general managers who signed, by email",
+        "offer": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+        "price": 500,
+        "priceEvidence": "Six boutique hotel general managers signed written orders at $500 per mystery-guest audit (signed orders, 2026-11-22).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 6,
+        "performer": "OWNER",
+        "agreements": [
+          500,
+          500,
+          500,
+          500,
+          500,
+          500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 9
+    }
+  }
+]

@@ -255,7 +255,7 @@ const reviewTool: McpTool = {
           '(field) that shows it; MISSING_PREREQUISITE names a field no EVIDENCE fact on the card carries. A condition without either is refused.',
         items: {
           type: 'object',
-          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' } },
+          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' }, defect: { type: 'string', enum: ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'], description: 'Against a price Brain\u2019s planner establishes: the defect the record shows. Required there.' } },
           required: ['opportunityId', 'link', 'basis', 'field', 'why'],
           additionalProperties: false,
         },

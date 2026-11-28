@@ -1,0 +1,165 @@
+{
+ "caseId": "ap-09-parks-net45-deadline-cut",
+ "keys": {
+  "cop_84ce3ccac4c34cc698d3": "playground"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $6,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 55 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_84ce3ccac4c34cc698d3"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_84ce3ccac4c34cc698d3",
+    "title": "Playground-equipment safety-inspection reports for municipal parks departments",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Municipal parks and recreation directors",
+     "reachableChannel": "The three directors who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:47.564Z",
+     "offerScope": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+     "priceCents": 240000,
+     "currency": "USD",
+     "fulfillmentOwner": "PlaySafe Inspections (certified playground inspector; written quote $900 per park system; completes all three inspections by day 10; invoices us net 60)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "municipal parks departments",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three directors who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 7200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 7200 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by PlaySafe Inspections (certified playground inspector; written quote $900 per par (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 900, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "55 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$900",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "PlaySafe Inspections (certified playground inspector; written quote $900 per park system; completes all three inspections by day 10; invoices us net 60) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Municipal parks and recreation directors",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt (signed purchase orders, 2026-11-20).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "55 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_9c390d0deedc4af4a5fc"
+  ],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:43:48.476Z"
+ }
+}

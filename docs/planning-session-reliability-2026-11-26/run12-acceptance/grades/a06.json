@@ -1,0 +1,36 @@
+{
+  "id": "ap-06-hardware-price-only-said",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_59c7feb543d9_afe5a7",
+  "stance": "CONDITIONAL",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3cd4d8b0f4e24bf89b22/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

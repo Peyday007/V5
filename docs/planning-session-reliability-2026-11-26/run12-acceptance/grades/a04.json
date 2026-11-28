@@ -1,0 +1,41 @@
+{
+  "id": "ap-04-dive-shop-owner-hours",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_f30ae3092c7b_7fa3bb",
+  "stance": "CONDITIONAL",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_236ba00f38a943adafc1/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no opening is startable: OFFER_AND_PRICE not established"
+  }
+}

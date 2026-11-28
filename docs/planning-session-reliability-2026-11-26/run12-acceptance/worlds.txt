@@ -1,0 +1,16 @@
+a01 ap-01-bike-shop-service-workbook cases/cases.json
+a02 ap-02-drywall-takeoffs-net cases/cases.json
+a03 ap-03-cinema-supplier-cost-rises cases/cases.json
+a04 ap-04-dive-shop-owner-hours cases/cases.json
+a05 ap-05-farmers-market-ledgers-short cases/cases.json
+a06 ap-06-hardware-price-only-said cases/cases.json
+a07 ap-07-fire-department-grant-as-price cases/cases.json
+a08 ap-08-orchestra-one-purchase-order cases/cases.json
+a09 ap-09-parks-net45-deadline-cut cases/cases.json
+a10 ap-10-roaster-price-contradicted cases/cases.json
+a11 ap-11-investigator-market-too-small cases/cases.json
+a12 ap-12-hotel-audits-owner-hours cases/cases.json
+d01 aq-01-1k-14d-five-hours cases/discovery-worlds.json
+d02 aq-02-printing-shops-5k-30d cases/discovery-worlds.json
+d03 aq-03-12k-net-45d-capital cases/discovery-worlds.json
+d04 aq-04-2500-21d-hands-off cases/discovery-worlds.json

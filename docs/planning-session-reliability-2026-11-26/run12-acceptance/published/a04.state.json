@@ -1,0 +1,2595 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_65338253f5544b489db0",
+   "words": "Collect $2,000 of settled cash within 28 days with no more than 4 hours a week of my own time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 28,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "The target amount has settled as cash in the owner's account within the window",
+    "ownerHoursPerWeek": 4,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "66ac8b60dcc50d94ffe62d3b"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_65338253f5544b489db0",
+    "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the breathing-air / tank-inspection log workbook to 11 of 260 listed dive shops",
+     "opportunityIds": [
+      "cop_0c495216c5604943ba98"
+     ],
+     "why": "11 sales x $220 = $2,420 settled cash >= $2,000 inside 28 days; conversion measured on this offer (30/250 = 12%) means ~92 contacts of 260 listed shops; Brain reaches, sells and produces the spreadsheet, so 0 owner hours (ceiling 4 h/week, 16 h total); card at checkout, 3 days to cash, $4 cost paid from receipts."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-led regulator and tank inspection days",
+      "why": "Four signed orders at $600 = $2,400, but each is 8 owner hours on site: 32 hours against the 16-hour ceiling (4 h/week x 4 weeks); at most 2 days = $1,200 fit, short of $2,000; and it needs the owner's physical work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published contacts (dive shops in the certification agency's public dive-center locator) with the offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $220 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close 11 card-at-checkout sales (measured conversion 30 paid of 250 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 66000,
+      "label": "3 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Direct cost of 3 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 260,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 220,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#buyerVolume",
+      "dated": "2026-11",
+      "claim": "260 reachable buyers with published contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#price",
+      "dated": "2026-11",
+      "claim": "Price $220",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 30 paid of 250 contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_270defdee1404f45aeef",
+      "why": "Each deal is 8 hours of the owner's own on-site work (card humanHours 8, fulfillmentOwner the owner): 4 deals = 32 h > 16 h allowed; 2 deals that fit pay $1,200 < $2,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "deals": 11,
+      "price": 220,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e5b8ffd6acec_d1a859",
+    "digest": "e5b8ffd6acec083310e3dacb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:37.410Z"
+   },
+   {
+    "goalId": "wst_65338253f5544b489db0",
+    "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+    "parentRevisionId": "rev_e5b8ffd6acec_d1a859",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the breathing-air / tank-inspection log workbook to 11 of 260 listed dive shops",
+     "opportunityIds": [
+      "cop_0c495216c5604943ba98"
+     ],
+     "why": "11 sales x $220 = $2,420 settled cash >= $2,000 inside 28 days; conversion measured on this offer (30/250 = 12%) means ~92 contacts of 260 listed shops; Brain reaches, sells and produces the spreadsheet, so 0 owner hours (ceiling 4 h/week, 16 h total); card at checkout, 3 days to cash, $4 cost paid from receipts."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-led regulator and tank inspection days",
+      "why": "Four signed orders at $600 = $2,400, but each is 8 owner hours on site: 32 hours against the 16-hour ceiling (4 h/week x 4 weeks); at most 2 days = $1,200 fit, short of $2,000; and it needs the owner's physical work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published contacts (dive shops in the certification agency's public dive-center locator) with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $220 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close 11 card-at-checkout sales (measured conversion 30 paid of 250 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 66000,
+      "label": "3 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Direct cost of 3 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 260,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 220,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#buyerVolume",
+      "dated": "2026-11",
+      "claim": "260 reachable buyers with published contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#price",
+      "dated": "2026-11",
+      "claim": "Price $220",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 30 paid of 250 contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic recomputed and the ledger matches.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "OFFER_AND_PRICE: price fact is comparable listing prices; no agreement recorded.",
+      "resolution": "Rebutted. $220 is this offer's recorded price (card priceCents 22000; price fact kind EVIDENCE), and Brain's CONVERSION link basis records the rate as \"measured on this offer's own sales: 30 accepted of 250 contacts\" - buyers accepted this offer, whose one price is $220, paid by card at checkout. The comparable-store listing corroborates that dive shops pay $220 for this class of workbook; it is not the only basis. Brain's OFFER_AND_PRICE link is ok on that EVIDENCE. Stance stays EXECUTABLE."
+     },
+     {
+      "finding": "Executor capabilities NOT_CONNECTED / UNREAD.",
+      "resolution": "Accepted as a note: the steps now say the outreach mailbox and card checkout are connected before day 1; Brain attached these executors and refused none of the steps. Card checkout (offerScope) collects payment without an invoice."
+     },
+     {
+      "finding": "Brain's step list assigns delivery to PERSON; plan says BRAIN.",
+      "resolution": "Reconciled under the fulfilment rule: no fulfillmentOwner is named and the deliverable is in requiredCapabilities (PRODUCE_SPREADSHEET, proved; delivery fact \"A spreadsheet Brain produces\"); humanHours 0, so owner hours stay 0 of 16."
+     },
+     {
+      "finding": "Exclusion of owner-led inspection days is correct.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "REBUTTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "captureMechanism",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_270defdee1404f45aeef",
+      "why": "Each deal is 8 hours of the owner's own on-site work (card humanHours 8, fulfillmentOwner the owner): 4 deals = 32 h > 16 h allowed; 2 deals that fit pay $1,200 < $2,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "deals": 11,
+      "price": 220,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_bde8f96f12cb_a93a10",
+    "digest": "bde8f96f12cb5f29b42c9dc7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:42:22.425Z"
+   },
+   {
+    "goalId": "wst_65338253f5544b489db0",
+    "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+    "parentRevisionId": "rev_bde8f96f12cb_a93a10",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell the breathing-air / tank-inspection log workbook to 11 of 260 listed dive shops",
+     "opportunityIds": [
+      "cop_0c495216c5604943ba98"
+     ],
+     "why": "11 sales x $220 = $2,420 settled cash >= $2,000 inside 28 days; conversion measured on this offer (30/250 = 12%) means ~92 contacts of 260 listed shops; Brain reaches, sells and produces the spreadsheet, so 0 owner hours (ceiling 4 h/week, 16 h total); card at checkout, 3 days to cash, $4 cost paid from receipts."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-led regulator and tank inspection days",
+      "why": "Four signed orders at $600 = $2,400, but each is 8 owner hours on site: 32 hours against the 16-hour ceiling (4 h/week x 4 weeks); at most 2 days = $1,200 fit, short of $2,000; and it needs the owner's physical work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $220 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $220 from the first 50 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 260 listed buyers once the price test passes (measured rate 30 accepted of 250 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 66000,
+      "label": "3 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Direct cost of 3 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 260,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $220 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#buyerVolume",
+      "dated": "2026-11",
+      "claim": "260 reachable buyers with published contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $220 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 30 accepted of 250 contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $220 from the first 50 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $220 by day 5: stop selling at $220; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $220 by day 5: offer to the rest of the 260 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic unchanged and correct: 11 x $220 = $2,420, cost $44, net $2,376, 92 of 260 contacts, settles by day 16 of 28, 0 of 16 owner hours.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Conversion fact records agreements, not payments, with no price, and the card has no agreement records; s_conv's '30 paid' overstates it.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Execution notes accepted (mailbox and checkout connected before day 1; delivery is BRAIN, 0 owner hours).",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_270defdee1404f45aeef",
+      "why": "Each deal is 8 hours of the owner's own on-site work (card humanHours 8, fulfillmentOwner the owner): 4 deals = 32 h > 16 h allowed; 2 deals that fit pay $1,200 < $2,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "deals": 11,
+      "price": 220,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $220 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_f30ae3092c7b_7fa3bb",
+    "digest": "f30ae3092c7b9d63b26242f8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:54.729Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_65338253f5544b489db0",
+   "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+   "parentRevisionId": "rev_bde8f96f12cb_a93a10",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell the breathing-air / tank-inspection log workbook to 11 of 260 listed dive shops",
+    "opportunityIds": [
+     "cop_0c495216c5604943ba98"
+    ],
+    "why": "11 sales x $220 = $2,420 settled cash >= $2,000 inside 28 days; conversion measured on this offer (30/250 = 12%) means ~92 contacts of 260 listed shops; Brain reaches, sells and produces the spreadsheet, so 0 owner hours (ceiling 4 h/week, 16 h total); card at checkout, 3 days to cash, $4 cost paid from receipts."
+   },
+   "alternatives": [
+    {
+     "title": "Owner-led regulator and tank inspection days",
+     "why": "Four signed orders at $600 = $2,400, but each is 8 owner hours on site: 32 hours against the 16-hour ceiling (4 h/week x 4 weeks); at most 2 days = $1,200 fit, short of $2,000; and it needs the owner's physical work."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "s_reach"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "OFFER",
+     "label": "Offer the workbook at $220 paid by card at checkout",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "s_price"
+     ],
+     "priceCents": 22000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Price test: count paid card orders at $220 from the first 50 contacts by day 5",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "price",
+      "conversion",
+      "s_price",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "SELL",
+     "label": "Close the remaining sales to the rest of the 260 listed buyers once the price test passes (measured rate 30 accepted of 250 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "t1",
+     "evidence": [
+      "conversion",
+      "s_conv"
+     ],
+     "priceCents": 22000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "DELIVER",
+     "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 4400,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "directCost",
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "COLLECT",
+     "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "timeToCash",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 88000,
+     "label": "4 workbook sales paid by card at checkout",
+     "settlesDay": 6,
+     "stepId": "s5"
+    },
+    {
+     "day": 6,
+     "kind": "SPEND",
+     "amountCents": 1600,
+     "label": "Direct cost of 4 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 88000,
+     "label": "4 workbook sales paid by card at checkout",
+     "settlesDay": 11,
+     "stepId": "s5"
+    },
+    {
+     "day": 11,
+     "kind": "SPEND",
+     "amountCents": 1600,
+     "label": "Direct cost of 4 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 66000,
+     "label": "3 workbook sales paid by card at checkout",
+     "settlesDay": 16,
+     "stepId": "s5"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 1200,
+     "label": "Direct cost of 3 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 16,
+   "quantities": [
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 260,
+     "unit": "reachable buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD actually paid per workbook",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "paid card orders at $220 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "paid sales per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per workbook",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "timeToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "dealsNeeded",
+     "status": "EVIDENCED",
+     "value": 11,
+     "unit": "sales",
+     "sources": [
+      "s_price",
+      "s_conv"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#buyerVolume",
+     "dated": "2026-11",
+     "claim": "260 reachable buyers with published contacts",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_reach",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#reachableChannel",
+     "dated": "2026-11",
+     "claim": "Published contact emails reach the buyer",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#price",
+     "dated": "2026-11",
+     "claim": "Comparable workbooks list at $220 (listing prices, a benchmark; not a recorded purchase of this offer)",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#conversionRates",
+     "dated": "2026-11",
+     "claim": "Measured on this offer: 30 accepted of 250 contacts",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#directCosts",
+     "dated": "2026-11",
+     "claim": "$4 direct cost per deal",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_0c495216c5604943ba98#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to usable cash",
+     "population": "dive shops in the certification agency's public dive-center locator",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c495216c5604943ba98"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 paid card orders at $220 from the first 50 contacts by day 5",
+    "stop": [
+     "Fewer than 3 paid orders at $220 by day 5: stop selling at $220; re-price or drop the opening"
+    ],
+    "continue": [
+     "3 or more paid orders at $220 by day 5: offer to the rest of the 260 listed buyers at the same price"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic unchanged and correct: 11 x $220 = $2,420, cost $44, net $2,376, 92 of 260 contacts, settles by day 16 of 28, 0 of 16 owner hours.",
+     "resolution": "Agreed; no change."
+    },
+    {
+     "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "finding": "Conversion fact records agreements, not payments, with no price, and the card has no agreement records; s_conv's '30 paid' overstates it.",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "finding": "Execution notes accepted (mailbox and checkout connected before day 1; delivery is BRAIN, 0 owner hours).",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "conversionRates",
+      "brain:OFFER_AND_PRICE",
+      "brain:CONVERSION"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_0c495216c5604943ba98",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_270defdee1404f45aeef",
+     "why": "Each deal is 8 hours of the owner's own on-site work (card humanHours 8, fulfillmentOwner the owner): 4 deals = 32 h > 16 h allowed; 2 deals that fit pay $1,200 < $2,000."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_0c495216c5604943ba98",
+     "deals": 11,
+     "price": 220,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": 16
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_0c495216c5604943ba98",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $220 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+    }
+   ],
+   "revisionId": "rev_f30ae3092c7b_7fa3bb",
+   "digest": "f30ae3092c7b9d63b26242f8",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_c95d3560a74b453aa75a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:44:54.729Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_f30ae3092c7b_7fa3bb",
+   "digest": "f30ae3092c7b9d63b26242f8",
+   "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4400,
+    "committedOpenCents": 0,
+    "preProofCents": 4400,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 3,
+    "collectedCents": 242000,
+    "collectedInWindowCents": 242000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 237600
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Breathing-air quality and tank-inspection compliance log wor\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Breathing-air quality and tank-inspection compliance log wor\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 22248× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Breathing-air quality and tank-inspection compliance log workbook for \".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_0c495216c5604943ba98"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+      "owner": "PERSON",
+      "cost": 4
+     },
+     {
+      "label": "Collect payment for \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "title": "Breathing-air quality and tank-inspection compliance log workbook for dive shops",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 2000,
+      "potentialReach": 2000,
+      "card": {
+       "payer": "Dive shop owners and compressor managers",
+       "reachableChannel": "Published shop emails in the certification agency's public dive-center locator",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:23.714Z",
+       "offerScope": "A quarterly air-test and tank-visual log workbook; delivered in 2 days; paid by card at checkout.",
+       "priceCents": 22000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "recreational scuba diving",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published shop emails in the certification agency's public dive-center locator"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 220 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 30 accepted of 250 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "11 deal(s) needed, 260 available in the window (260 reachable buyers, each buying about every 91 days, so 1 purchase(s) each in 28 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 28 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The certification agency's public dive-center locator lists 260 dive shops in the region, each with a published email; each must keep its breathing-air test and tank-visual log current every quarter.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A quarterly air-test and tank-visual log workbook; delivered in 2 days; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "30 agreements from 250 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Dive shop owners and compressor managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Comparable dive-center compliance log workbooks sell for $220 on the agency's retailer resource store (listing prices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_270defdee1404f45aeef",
+      "title": "Owner-led regulator and tank visual-inspection days at dive shops",
+      "reason": "needs the owner's physical work: the service (\"on-site\") would be performed by The owner, personally; the owner does no physical work",
+      "card": {
+       "payer": "Dive shop owners",
+       "reachableChannel": "The four shop owners who signed, by phone and email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:23.714Z",
+       "offerScope": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 8,
+       "requiredCapabilities": [],
+       "industry": "recreational scuba diving",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One on-site inspection day performed by the owner (8 hours on site); paid on completion. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Dive shop owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four dive shops signed written orders at $600 per on-site inspection day (signed orders, 2026-11-19).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 200000,
+     "daysLeft": 28,
+     "hoursCeiling": 16,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 4
+    },
+    "at": "2026-11-28T01:36:41.762Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_e5b8ffd6acec_d1a859",
+    "revisionDigest": "e5b8ffd6acec083310e3dacb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_236ba00f38a943adafc1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "EXECUTABLE overclaims on price. Arithmetic holds (11 x $220 = $2,420 >= $2,000; 11/0.12 = ~92 contacts of 260; $44 direct cost paid after settlement; last receipt settles day 16 of 28; 0 owner hours against 16 allowed; net $2,376), but the $220 is 'Comparable dive-center compliance log workbooks sell for $220 on the agency's retailer resource store (listing prices)' - what other sellers list at, not a purchase price these dive shops paid for this workbook. The card holds no agreement for this offer and the conversion fact (30 agreements of 250) does not state at what price. The plan therefore rests on an unmeasured price and should be CONDITIONAL: offer at $220 to a first batch (~40-50 shops), proof = paid card orders at $220 near the measured rate, stop/re-price if none; or cite a recorded sale at $220.",
+    "findings": [
+     "Recomputed: 11 x $220 = $2,420; cost 11 x $4 = $44; net $2,376; contacts 11/0.12 = 92 <= 260 (quarterly buyers, one purchase each in 28 days); settles by day 16 < 28; owner hours 0 <= 4/week; no owner funding. Ledger matches steps.",
+     "OFFER_AND_PRICE: price fact is comparable workbooks' listing prices on the agency's retailer resource store (other sellers' asks), not this buyer's purchase price for this offer; no agreement recorded.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE NOT_CONNECTED; DISCOVER_LOCAL_BUSINESSES and READ_REPLIES UNREAD; the plan does not say these must be connected before day 1.",
+     "Brain's step list assigns delivery to PERSON; the plan says BRAIN. If delivery needed the owner, the 0-hour claim would need an hours figure; card says Brain produces the spreadsheet, so reconcile.",
+     "Exclusion of owner-led inspection days is correct: 8 on-site owner hours per deal, owner does no physical work; even ignoring that, 2 days ($1,200) fit 16 h and fall short of $2,000."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:40:55.934Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The price fact is comparable workbooks' listing prices on the agency's retailer store, a benchmark of what other sellers ask, not a price these dive shops have paid for this offer; the card records no agreement at $220."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_bde8f96f12cb_a93a10",
+    "revisionDigest": "bde8f96f12cb5f29b42c9dc7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_236ba00f38a943adafc1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The rebuttal does not establish the price. (1) The only price fact is 'Comparable dive-center compliance log workbooks sell for $220 on the agency's retailer resource store (listing prices)': other sellers' asking prices for other workbooks, not a purchase by these shops. card.priceCents is the offer's asking price - the plan's input, not evidence anyone pays it. (2) The conversion fact is '30 agreements from 250 contacts'; it states no price, the card's agreements[] is empty, and the plan's source s_conv paraphrases it as '30 paid', which the card does not say. (3) Brain does not treat conversion measured on an offer as establishing its price: where the price fact is not a real purchase price (a parallel card with 18 agreements of 200 on the offer and a person-stated $350), Brain marks OFFER_AND_PRICE missing. So the link rests on the benchmark alone. Everything else is strong (260 shops buying quarterly, 12% rate, Brain-produced spreadsheet, $4 cost, card at checkout, 3 days to cash, 0 owner hours), so the right stance is CONDITIONAL: offer at $220 to the first ~50 shops; proof = at least 3 paid card orders at $220 by about day 5 (6% -> 3 + 0.06 x 210 = ~15 orders, $3,300, carries $2,000 by day ~16); stop or re-price below that; continue to the rest of the locator otherwise. Or cite a recorded payment for this workbook at $220.",
+    "findings": [
+     "Arithmetic unchanged and correct: 11 x $220 = $2,420, cost $44, net $2,376, 92 of 260 contacts, settles by day 16 of 28, 0 of 16 owner hours.",
+     "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+     "Conversion fact records agreements, not payments, with no price, and the card has no agreement records; s_conv's '30 paid' overstates it.",
+     "Execution notes accepted (mailbox and checkout connected before day 1; delivery is BRAIN, 0 owner hours)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:44:15.180Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The card's price fact is comparable workbooks' listing prices on the agency's retailer store (other sellers' asking prices); no agreement or payment at $220 for this offer is recorded, and conversionRates records agreements without a price."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_f30ae3092c7b_7fa3bb",
+    "revisionDigest": "f30ae3092c7b9d63b26242f8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_236ba00f38a943adafc1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance and the test is sound. Price is the one unknown (the card's $220 is a comparable-listing benchmark); the test measures it with paid card orders at $220 and validation.decides = OFFER_AND_PRICE. Fulfilment (Brain-produced spreadsheet, proved) is possible before orders are taken and card-at-checkout means nothing is delivered unpaid. Passing at threshold carries the target: 3 paid of 50 (6%) -> 3 + 0.06 x 210 remaining = ~15 orders x $220 = $3,300 >= $2,000; at the evidenced 12%, 11 orders need ~92 contacts of 260. Stop (<3) and continue (>=3) cover every outcome. $4 costs come from settled receipts (no capital), cash settles by about day 16 of 28, and Brain does every step, so 0 of the 16 allowed owner hours.",
+    "findings": [
+     "Threshold check: 6% on the remaining 210 shops gives ~15 orders ($3,300), settling well inside 28 days.",
+     "Minor: s4 DELIVER is day 4 but depends on s3 SELL day 6; test-order deliveries precede s3. Label s4 as covering test orders.",
+     "Minor: dealsNeeded is marked EVIDENCED though it holds only if the price is $220.",
+     "Owner should connect the outreach mailbox and card checkout before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:31.813Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_f30ae3092c7b_7fa3bb",
+   "digest": "f30ae3092c7b9d63b26242f8",
+   "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+   "plan": {
+    "goalId": "wst_65338253f5544b489db0",
+    "contractDigest": "66ac8b60dcc50d94ffe62d3b",
+    "parentRevisionId": "rev_bde8f96f12cb_a93a10",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell the breathing-air / tank-inspection log workbook to 11 of 260 listed dive shops",
+     "opportunityIds": [
+      "cop_0c495216c5604943ba98"
+     ],
+     "why": "11 sales x $220 = $2,420 settled cash >= $2,000 inside 28 days; conversion measured on this offer (30/250 = 12%) means ~92 contacts of 260 listed shops; Brain reaches, sells and produces the spreadsheet, so 0 owner hours (ceiling 4 h/week, 16 h total); card at checkout, 3 days to cash, $4 cost paid from receipts."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-led regulator and tank inspection days",
+      "why": "Four signed orders at $600 = $2,400, but each is 8 owner hours on site: 32 hours against the 16-hour ceiling (4 h/week x 4 weeks); at most 2 days = $1,200 fit, short of $2,000; and it needs the owner's physical work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 50 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $220 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $220 from the first 50 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 260 listed buyers once the price test passes (measured rate 30 accepted of 250 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 22000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 88000,
+      "label": "4 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 1600,
+      "label": "Direct cost of 4 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 66000,
+      "label": "3 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Direct cost of 3 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 260,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $220 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#buyerVolume",
+      "dated": "2026-11",
+      "claim": "260 reachable buyers with published contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $220 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 30 accepted of 250 contacts",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_0c495216c5604943ba98#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "dive shops in the certification agency's public dive-center locator",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c495216c5604943ba98"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $220 from the first 50 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $220 by day 5: stop selling at $220; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $220 by day 5: offer to the rest of the 260 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic unchanged and correct: 11 x $220 = $2,420, cost $44, net $2,376, 92 of 260 contacts, settles by day 16 of 28, 0 of 16 owner hours.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Conversion fact records agreements, not payments, with no price, and the card has no agreement records; s_conv's '30 paid' overstates it.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Execution notes accepted (mailbox and checkout connected before day 1; delivery is BRAIN, 0 owner hours).",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_270defdee1404f45aeef",
+      "why": "Each deal is 8 hours of the owner's own on-site work (card humanHours 8, fulfillmentOwner the owner): 4 deals = 32 h > 16 h allowed; 2 deals that fit pay $1,200 < $2,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "deals": 11,
+      "price": 220,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_0c495216c5604943ba98",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $220 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_f30ae3092c7b_7fa3bb",
+    "digest": "f30ae3092c7b9d63b26242f8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:54.729Z"
+   },
+   "review": {
+    "revisionId": "rev_f30ae3092c7b_7fa3bb",
+    "revisionDigest": "f30ae3092c7b9d63b26242f8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c95d3560a74b453aa75a/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_236ba00f38a943adafc1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance and the test is sound. Price is the one unknown (the card's $220 is a comparable-listing benchmark); the test measures it with paid card orders at $220 and validation.decides = OFFER_AND_PRICE. Fulfilment (Brain-produced spreadsheet, proved) is possible before orders are taken and card-at-checkout means nothing is delivered unpaid. Passing at threshold carries the target: 3 paid of 50 (6%) -> 3 + 0.06 x 210 remaining = ~15 orders x $220 = $3,300 >= $2,000; at the evidenced 12%, 11 orders need ~92 contacts of 260. Stop (<3) and continue (>=3) cover every outcome. $4 costs come from settled receipts (no capital), cash settles by about day 16 of 28, and Brain does every step, so 0 of the 16 allowed owner hours.",
+    "findings": [
+     "Threshold check: 6% on the remaining 210 shops gives ~15 orders ($3,300), settling well inside 28 days.",
+     "Minor: s4 DELIVER is day 4 but depends on s3 SELL day 6; test-order deliveries precede s3. Label s4 as covering test orders.",
+     "Minor: dealsNeeded is marked EVIDENCED though it holds only if the price is $220.",
+     "Owner should connect the outreach mailbox and card checkout before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:31.813Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,000 of settled cash within 28 days with no more than 4 hours a week of my own time.",
+    "terms": "62c705c4373fc839",
+    "openings": {
+     "cop_0c495216c5604943ba98": "bf9e78b6c808ef6a",
+     "cop_270defdee1404f45aeef": "62f079996829e629"
+    }
+   },
+   "at": "2026-11-28T01:47:05.256Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

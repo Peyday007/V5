@@ -1,0 +1,282 @@
+{
+ "caseId": "ap-01-bike-shop-service-workbook",
+ "keys": {
+  "cop_133d3329c4fa414f9317": "serviceWorkbook",
+  "cop_ba31fe0b78ec48a4b0e5": "ebikeLeads"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Winter service-menu repricing and repair-queue workbook for \" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Winter service-menu repricing and repair-queue workbook for \" (assumption-only coverage: it reaches the target in 99.9% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14784× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Winter service-menu repricing and repair-queue workbook for independen\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_133d3329c4fa414f9317",
+   "cop_ba31fe0b78ec48a4b0e5"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Collect payment for \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_133d3329c4fa414f9317",
+    "title": "Winter service-menu repricing and repair-queue workbook for independent bike shops",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 2500,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Independent bike shop owners and service managers",
+     "reachableChannel": "Published service-desk emails in the state bicycle dealers' association directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:09.325Z",
+     "offerScope": "A workbook built from the shop's own service tickets; delivered in 2 days; paid by card at checkout.",
+     "priceCents": 18000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent bicycle retail",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published service-desk emails in the state bicycle dealers' association director"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 180 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 27 accepted of 300 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "15 deal(s) needed, 420 available in the window (420 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state bicycle dealers' association directory lists 420 independent bike shops, each with a published service-desk email; each reprices its service menu every winter.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook built from the shop's own service tickets; delivered in 2 days; paid by card at checkout. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "27 agreements from 300 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent bike shop owners and service managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Comparable shop-operations workbooks for bicycle retailers sell for $180 on the dealers' association member marketplace (listing prices, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+    "title": "Weekly e-bike buyer lead lists for bike shops",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 99,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Independent bike shop owners",
+     "reachableChannel": "Published shop emails",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:09.325Z",
+     "offerScope": "Weekly e-bike buyer lead lists for bike shops",
+     "priceCents": 9900,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent bicycle retail",
+     "mechanism": "INFORMATION_ASYMMETRY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published shop emails"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 99 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 10 accepted of 120 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "11 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Brain estimates bike shops in the region would buy e-bike lead lists every week.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Weekly e-bike buyer lead lists for bike shops to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "10 agreements from 120 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent bike shop owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Regional retail lead lists sell for $99 a week (lead-broker rate card, 2026-10).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:36:41.850Z"
+ }
+}

@@ -1,0 +1,278 @@
+{
+ "caseId": "ap-02-drywall-takeoffs-net",
+ "keys": {
+  "cop_1a36440a4c3a4ecea669": "takeoffs",
+  "cop_81a4b8c69a9d4e7689fe": "hanging"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5700× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted material takeoffs for residential drywall contractors\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_1a36440a4c3a4ecea669"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Subcontracted material takeoffs for residential drywall contractors\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Subcontracted material takeoffs for residential drywall contractors\"",
+    "owner": "PERSON",
+    "cost": 350
+   },
+   {
+    "label": "Collect payment for \"Subcontracted material takeoffs for residential drywall contractors\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_1a36440a4c3a4ecea669",
+    "title": "Subcontracted material takeoffs for residential drywall contractors",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Owners of residential drywall contracting firms",
+     "reachableChannel": "The six contractors who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:14.218Z",
+     "offerScope": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+     "priceCents": 90000,
+     "currency": "USD",
+     "fulfillmentOwner": "SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs a week, on days 5, 12 and 19 of the window; invoices us net 10 after each delivery)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "residential drywall contracting",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six contractors who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 5400 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5400 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 350, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$350",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs a week, on days 5, 12 and 19 of the window; invoices us net 10 after each delivery) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of residential drywall contracting firms",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six drywall contractors signed written orders at $900 per takeoff (signed orders, 2026-11-20).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+    "title": "Overflow drywall hanging for general contractors",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 2400,
+    "potentialReach": 2400,
+    "card": {
+     "payer": "General contractors with overflow framing jobs",
+     "reachableChannel": "The two contractors who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:14.218Z",
+     "offerScope": "Overflow drywall hanging for general contractors",
+     "priceCents": 420000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "residential drywall contracting",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 420000,
+      "currency": "USD",
+      "deliverable": "Overflow drywall hanging for general contractors",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 420000,
+      "currency": "USD",
+      "deliverable": "Overflow drywall hanging for general contractors",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Overflow drywall hanging for general contractors to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3000",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "General contractors with overflow framing jobs",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two general contractors signed written orders at $4,200 per overflow hanging job (signed orders, 2026-11-21).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:36:41.768Z"
+ }
+}
