@@ -1,0 +1,301 @@
+{
+ "caseId": "av-11-welding-objective-narrowed",
+ "keys": {
+  "cop_ed5f74bcdb1e4946aacc": "wpqLog",
+  "cop_b94520d8cf6d4657810a": "mobileRepair"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 46875× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Welder-qualification continuity log workbook for structural \" needs [figure withheld] and keeps [figure withheld], 375× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Service managers at farm-equipment dealerships\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_ed5f74bcdb1e4946aacc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+    "owner": "PERSON",
+    "cost": 5
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Service managers at farm-equipment dealerships",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Service managers at farm-equipment dealerships",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 294.9258967997813
+   },
+   {
+    "label": "Collect payment for \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+    "title": "Welder-qualification continuity log workbook for structural steel fabrication shops",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Quality managers at structural steel fabricators",
+     "reachableChannel": "Email to the shops listed in the state fabricators association's public member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:52.244Z",
+     "offerScope": "A workbook tracking every welder's process continuity against the six-month rule, built by Brain from the shop's welder roster within one day. Paid by card at order; payout 5 days later.",
+     "priceCents": 38000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "structural steel fabrication",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the shops listed in the state fabricators association's public member d"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 21 accepted of 150 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "9 deal(s) needed, 300 available in the window (300 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "300 fabrication shops are listed with quality-manager emails in the state fabricators association's public directory; each must keep every welder's qualification continuity current under its certification audit.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook tracking every welder's process continuity against the six-month rule, built by Brain from the shop's welder roster within one day. Paid by card at order; payout 5 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "21 paid orders from 150 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Quality managers at structural steel fabricators",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Welding-compliance template sellers list a welder-qualification continuity log workbook at $380 (listing pages, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_b94520d8cf6d4657810a",
+    "title": "Owner-performed mobile welding repairs for farm-equipment dealers",
+    "reason": "needs the owner's physical work: the service (\"on site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "Service managers at farm-equipment dealerships",
+     "reachableChannel": "The three service managers who signed repair orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:52.244Z",
+     "offerScope": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+     "priceCents": 120000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 10,
+     "requiredCapabilities": [],
+     "industry": "farm equipment repair",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The owner welds on site: 10 owner hours a repair, paid 7 days after the repair. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$150",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Service managers at farm-equipment dealerships",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three dealerships signed repair orders at $1,200 each (signed orders, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": 13,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 3
+  },
+  "at": "2026-11-28T06:09:05.328Z"
+ }
+}

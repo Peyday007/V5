@@ -1,0 +1,218 @@
+{
+ "caseId": "av-07-maple-label-price-contradicted",
+ "keys": {
+  "cop_aa5d37eff1d94dd199c8": "mapleLabels"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8160× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Nutrition-facts and allergen label files for small maple syr\" needs [figure withheld] and keeps [figure withheld], 96× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted. The plan's steps are for \"Sugarmakers who bottle and sell their own syrup\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_aa5d37eff1d94dd199c8"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+    "owner": "PERSON",
+    "cost": 3
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Sugarmakers who bottle and sell their own syrup",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Sugarmakers who bottle and sell their own syrup",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 5.985690184832624
+   },
+   {
+    "label": "Collect payment for \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_aa5d37eff1d94dd199c8",
+    "title": "Nutrition-facts and allergen label files for small maple syrup producers",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2000,
+    "card": {
+     "payer": "Sugarmakers who bottle and sell their own syrup",
+     "reachableChannel": "Email to the producers listed in the state maple producers association's directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:29.041Z",
+     "offerScope": "A print-ready nutrition-facts and allergen label file set for each bottle size, built by Brain within one day. Paid by card at order; payout 4 days later.",
+     "priceCents": 18000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "maple syrup production",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the producers listed in the state maple producers association's directo"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 20 accepted of 160 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "113 deal(s) needed at the measured rate means asking 1250 prospects, but the market holds only 620 (620 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 56"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 3, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "4 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "620 maple producers are listed with emails in the state maple producers association's public directory; each relabels before the spring sugaring season.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A print-ready nutrition-facts and allergen label file set for each bottle size, built by Brain within one day. Paid by card at order; payout 4 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "20 paid orders from 160 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Sugarmakers who bottle and sell their own syrup",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$18",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_df0414f53d184b7dbc73"
+  ],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T06:10:59.305Z"
+ }
+}

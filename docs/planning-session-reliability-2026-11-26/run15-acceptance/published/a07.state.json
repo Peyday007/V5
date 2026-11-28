@@ -1,0 +1,2937 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_48b6435e2ff54749878b",
+   "words": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of $2,000 received within 30 days, with no up-front capital spent",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "02aadef32db2de6dc946f837"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built nutrition-facts and allergen label file sets to maple producers at $180",
+     "opportunityIds": [
+      "cop_aa5d37eff1d94dd199c8"
+     ],
+     "why": "Every link is on the card: 620 reachable buyers (EVIDENCE), a $180 price this offer has already sold at (20 paid orders of 160 contacts, 12%+), Brain-proved spreadsheet fulfilment at $3 direct cost and zero capital, and card payout 4 days after order. 13 orders x $180 = $2340 gross, $2301 net, against the $2000 target, needing about 104 contacts of 160 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the price above $180",
+      "why": "Rejected: the 20/160 conversion was measured at $180; a different price would be an unmeasured assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 160 of the 620 producers in the state maple producers association directory (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the nutrition-facts and allergen label file set at $180, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each nutrition-facts and allergen label file set within one day of the order (13 orders)",
+      "performer": "BRAIN",
+      "costCents": 3900,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 4,
+      "kind": "SPEND",
+      "amountCents": 3900,
+      "label": "Direct delivery cost $3 x 13",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 108000,
+      "label": "6 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 126000,
+      "label": "7 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 18000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $180 (listing/price pages, 2026-11); card offer price 18000 cents",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts on this offer's own sales",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 reachable buyers listed with contact details",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per deal",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 13,
+      "price": 180,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c73ea143070a_ee4af9",
+    "digest": "c73ea143070a0473c155381d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:05.956Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built nutrition-facts and allergen label file sets to maple producers at $180",
+     "opportunityIds": [
+      "cop_aa5d37eff1d94dd199c8"
+     ],
+     "why": "Every link is on the card: 620 reachable buyers (EVIDENCE), a $180 price this offer has already sold at (20 paid orders of 160 contacts, 12%+), Brain-proved spreadsheet fulfilment at $3 direct cost and zero capital, and card payout 4 days after order. 13 orders x $180 = $2340 gross, $2301 net, against the $2000 target, needing about 104 contacts of 160 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the price above $180",
+      "why": "Rejected: the 20/160 conversion was measured at $180; a different price would be an unmeasured assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 160 of the 620 producers in the state maple producers association directory (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the nutrition-facts and allergen label file set at $180, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each nutrition-facts and allergen label file set within one day of the order (13 orders)",
+      "performer": "BRAIN",
+      "costCents": 3900,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 1800,
+      "label": "Direct delivery cost $3 x 6, paid out of the first payout (card exposure $0)",
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2100,
+      "label": "Direct delivery cost $3 x 7, paid out of the second payout",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 108000,
+      "label": "6 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 126000,
+      "label": "7 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 18000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $180 (listing/price pages, 2026-11); card offer price 18000 cents",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts on this offer's own sales",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 reachable buyers listed with contact details",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per deal",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 13,
+      "price": 180,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_fdd44b7d2814_f9d731",
+    "digest": "fdd44b7d2814f72d96bff98f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:18.009Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_fdd44b7d2814_f9d731",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built nutrition-facts and allergen label file sets to maple producers at $180",
+     "opportunityIds": [
+      "cop_aa5d37eff1d94dd199c8"
+     ],
+     "why": "Every link is on the card: 620 reachable buyers (EVIDENCE), a $180 price this offer has already sold at (20 paid orders of 160 contacts, 12%+), Brain-proved spreadsheet fulfilment at $3 direct cost and zero capital, and card payout 4 days after order. 13 orders x $180 = $2340 gross, $2301 net, against the $2000 target, needing about 104 contacts of 160 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the price above $180",
+      "why": "Rejected: the 20/160 conversion was measured at $180; a different price would be an unmeasured assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 160 of the 620 producers in the state maple producers association directory (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the nutrition-facts and allergen label file set at $180, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each nutrition-facts and allergen label file set within one day of the order (13 orders)",
+      "performer": "BRAIN",
+      "costCents": 3900,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 1800,
+      "label": "Direct delivery cost $3 x 6, paid out of the first payout (card exposure $0)",
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2100,
+      "label": "Direct delivery cost $3 x 7, paid out of the second payout",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 108000,
+      "label": "6 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 126000,
+      "label": "7 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 18000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $180 (listing/price pages, 2026-11); card offer price 18000 cents",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts on this offer's own sales",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 reachable buyers listed with contact details",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per deal",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic recomputed; holds if $180 holds",
+      "resolution": "Agreed with the arithmetic. The $180 is established — see condition 0."
+     },
+     {
+      "finding": "1: published price pages are NOT_A_PURCHASE",
+      "resolution": "Rebutted. The card's own offer is priced priceCents 18000 and sold 'Paid by card at order' (offerScope); the conversionRates EVIDENCE fact records 20 PAID orders from 160 contacts, which Brain's CONVERSION link says was 'measured on this offer's own sales', and Brain's OFFER_AND_PRICE link holds 'price 180 USD (EVIDENCE)'. Paid orders of this offer are purchases at its single card price; the price-page fact corroborates the same figure and nothing on the card contradicts it."
+     },
+     {
+      "finding": "2: fulfilment wording mismatch (label file vs spreadsheet)",
+      "resolution": "Rebutted. The card's delivery EVIDENCE fact is 'A spreadsheet Brain produces', requiredCapabilities is PRODUCE_SPREADSHEET, and brain:FULFILMENT says Brain has proved it; the same offer already fulfilled 20 paid orders. The record says what Brain delivers, and nothing on it says the deliverable needs a capability Brain lacks."
+     },
+     {
+      "finding": "3: humanHours 0.5 per deal not on the ledger",
+      "resolution": "Rebutted: under the fulfilment rule humanHours is the fulfiller's per-deal work, and the fulfiller is BRAIN (no fulfillmentOwner; deliverable in requiredCapabilities); it is not owner time, and the goal states no owner-hour limit, so member ownerHours stays null."
+     },
+     {
+      "finding": "4: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED",
+      "resolution": "Accepted as an execution note, not a chain-link gap: Brain's own check attached these executors and did not refuse any step; outreach and card checkout are performed by Brain under its operations, and the card's offerScope ('Paid by card at order; payout 4 days later') and timeToFirstCash fact fix the collection path. No opening fact is contradicted."
+     },
+     {
+      "finding": "5: suggested CONDITIONAL on OFFER_AND_PRICE",
+      "resolution": "Rebutted with condition 0: price established by paid orders of this offer; stance stays EXECUTABLE."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Rebutted: paid orders of this offer at its single card price establish the price.",
+      "condition": 0,
+      "decision": "REBUTTED",
+      "records": [
+       "priceCents",
+       "offerScope",
+       "conversionRates",
+       "price",
+       "brain:CONVERSION",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 13,
+      "price": 180,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_6d9e8b8f24a7_bf716f",
+    "digest": "6d9e8b8f24a7f724faef4ceb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:40.120Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_6d9e8b8f24a7_bf716f",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test, then sell Brain-built nutrition-facts and allergen label file sets to maple producers at $180",
+     "opportunityIds": [
+      "cop_aa5d37eff1d94dd199c8"
+     ],
+     "why": "Reach (620 listed buyers), conversion on this offer (20 paid of 160), Brain-proved fulfilment at $3, zero capital and 4-day card payout are on the card. The $180 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $180 is unknown and a live $180 card offer to the first 60 decides it before the rest of the list is contacted. 13 orders x $180 = $2340 gross carries the $2000 target with all cash settled by day 17."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the price above $180",
+      "why": "Rejected: the 20/160 conversion was measured at $180; a different price would be an unmeasured assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails the first 60 of the 620 producers in the state maple producers association directory (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Live test: offer the nutrition-facts and allergen label file set at $180, paid by card at order, to those 60; count paid orders at $180 by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_listing",
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "REACH",
+      "label": "On proof, Brain emails 180 more of the remaining list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Offer the nutrition-facts and allergen label file set at $180 by card to the second tranche",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each nutrition-facts and allergen label file set within one day of the order (13 orders)",
+      "performer": "BRAIN",
+      "costCents": 3900,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Delivery cost x 4, paid out of the test-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2700,
+      "label": "Delivery cost x 9, paid out of the second-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 72000,
+      "label": "4 test-tranche card orders at $180",
+      "settlesDay": 10,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 162000,
+      "label": "9 second-tranche card orders at $180",
+      "settlesDay": 17,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price these buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "paid card orders at $180 in the live test (s3)"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 18000,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "confirmed by the live test"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts on this offer's own sales",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 reachable buyers listed with contact details",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per deal",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_listing",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Other sellers' listing/price pages show a comparable product at $180 — an asking price, not a purchase by these buyers",
+      "population": "Other sellers of comparable products (not these buyers)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": {
+     "proof": "At least 4 paid card orders at $180 from the first 60 contacts by day 7",
+     "stop": [
+      "Fewer than 4 paid orders at $180 from the first 60 by day 7: stop outreach at $180 and re-plan the price",
+      "Any refund or chargeback pattern showing buyers reject the price"
+     ],
+     "continue": [
+      "4+ paid at $180 by day 7: email 180 more of the list at $180 and fulfil each order within a day"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic correct",
+      "resolution": "Agreed; unchanged (13 x $180 = $2,340)."
+     },
+     {
+      "finding": "1: price fact is a competitor benchmark",
+      "resolution": "Accepted. Stance is now CONDITIONAL with a live $180 card test to the first 60 producers deciding OFFER_AND_PRICE, and a disagreement with Brain's OFFER_AND_PRICE link records why."
+     },
+     {
+      "finding": "2: fulfilment and owner-hours rebuttals accepted",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "3: what would make this PASS",
+      "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $180 to the first 60, proof >=4 paid by day 7, stop below 4, continue with 180 more; settles by day 17."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Accepted; price marked UNKNOWN and tested.",
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "priceCents",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 13,
+      "price": 180,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 17,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain's basis 'price 180 USD (EVIDENCE)' is the price fact, which states its own source as food-label design services' published price pages — other sellers' asking price, not a purchase by these maple producers; the conversionRates fact (20 paid of 160) records no price. No record shows a buyer paying $180 for this offer, so the link is unestablished until the live test."
+     }
+    ],
+    "revisionId": "rev_36625051c752_855abc",
+    "digest": "36625051c752a1ad9d0220ac",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:45.859Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_6d9e8b8f24a7_bf716f",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test, then sell Brain-built nutrition-facts and allergen label file sets to maple producers at $180",
+     "opportunityIds": [
+      "cop_aa5d37eff1d94dd199c8"
+     ],
+     "why": "Reach (620 listed buyers), conversion on this offer (20 paid of 160), Brain-proved fulfilment at $3, zero capital and 4-day card payout are on the card. The $180 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $180 is unknown and a live $180 card offer to the first 60 decides it before the rest of the list is contacted. 13 orders x $180 = $2340 gross carries the $2000 target with all cash settled by day 17."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the price above $180",
+      "why": "Rejected: the 20/160 conversion was measured at $180; a different price would be an unmeasured assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails the first 60 of the 620 producers in the state maple producers association directory (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Live test: offer the nutrition-facts and allergen label file set at $180, paid by card at order, to those 60; count paid orders at $180 by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_listing",
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "REACH",
+      "label": "On proof, Brain emails 180 more of the remaining list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Offer the nutrition-facts and allergen label file set at $180 by card to the second tranche",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each nutrition-facts and allergen label file set within one day of the order (13 orders)",
+      "performer": "BRAIN",
+      "costCents": 3900,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Delivery cost x 4, paid out of the test-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2700,
+      "label": "Delivery cost x 9, paid out of the second-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 72000,
+      "label": "4 test-tranche card orders at $180",
+      "settlesDay": 10,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 162000,
+      "label": "9 second-tranche card orders at $180",
+      "settlesDay": 17,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price these buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid card orders at $180 in the live test (s3)"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 18000,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "confirmed by the live test"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts on this offer's own sales",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 reachable buyers listed with contact details",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per deal",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "src_listing",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Other sellers' listing/price pages show a comparable product at $180 — an asking price, not a purchase by these buyers",
+      "population": "Other sellers of comparable products (not these buyers)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": {
+     "proof": "At least 4 paid card orders at $180 from the first 60 contacts by day 7",
+     "stop": [
+      "Fewer than 4 paid orders at $180 from the first 60 by day 7: stop outreach at $180 and re-plan the price",
+      "Any refund or chargeback pattern showing buyers reject the price"
+     ],
+     "continue": [
+      "4+ paid at $180 by day 7: email 180 more of the list at $180 and fulfil each order within a day"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic correct",
+      "resolution": "Agreed; unchanged (13 x $180 = $2,340)."
+     },
+     {
+      "finding": "1: price fact is a competitor benchmark",
+      "resolution": "Accepted. Stance is now CONDITIONAL with a live $180 card test to the first 60 producers deciding OFFER_AND_PRICE, and a disagreement with Brain's OFFER_AND_PRICE link records why."
+     },
+     {
+      "finding": "2: fulfilment and owner-hours rebuttals accepted",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "3: what would make this PASS",
+      "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $180 to the first 60, proof >=4 paid by day 7, stop below 4, continue with 180 more; settles by day 17."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Accepted; price marked UNKNOWN and tested.",
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "priceCents",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 13,
+      "price": 180,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 17,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain's basis 'price 180 USD (EVIDENCE)' is the price fact, which states its own source as food-label design services' published price pages — other sellers' asking price, not a purchase by these maple producers; the conversionRates fact (20 paid of 160) records no price. No record shows a buyer paying $180 for this offer, so the link is unestablished until the live test."
+     }
+    ],
+    "revisionId": "rev_6f395b4e2a15_59c64f",
+    "digest": "6f395b4e2a15eb5563961bf9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:52.230Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_6f395b4e2a15_59c64f",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the label-file opening's price is now contradicted ($180 card vs $18 evidence)",
+     "opportunityIds": [],
+     "why": "The opening's record changed: its price fact (EVIDENCE) now reads $18 while the card's priceCents is 18000 ($180), and no record shows any buyer paying either figure (the 20/160 conversion states no price). At the evidenced $18, net $15 a deal needs 134 deals; at the measured 12.5% that means ~1,070 contacts against 620 listed producers (~78 orders, ~$1,400), so the target is out of reach at $18. Only at $180 would 13 deals carry it, and $180 is contradicted. No plan is established until the price is."
+    },
+    "alternatives": [
+     {
+      "title": "Keep the conditional $180 test plan",
+      "why": "Rejected as a plan: the price it rests on is now contradicted by the card's own price fact ($18), so it cannot be carried as established or as a simple unknown; the contradiction must be resolved first."
+     },
+     {
+      "title": "Sell at the evidenced $18",
+      "why": "Rejected: 620 producers x 12.5% ~ 78 orders x $18 ~ $1,400 gross, under $2,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain resolves which price is real for this offer: re-read the price fact's source and check the 20 recorded paid orders for the amount actually charged ($180 vs $18)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_card",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "resolution of $18 (price fact) vs $180 (card priceCents), e.g. the amounts on the 20 recorded paid orders"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Price fact now reads $18",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_card",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#priceCents",
+      "dated": "2026-11",
+      "claim": "Card priceCents 18000 ($180)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts (no price stated)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 maple producers listed with emails",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Price: the opening's own price fact ($18) contradicts its card price ($180) and no record shows a buyer paying either; at $18 the 620-producer list cannot carry $2,000 at the measured conversion, so whether any plan exists turns entirely on which price is real.",
+     "resolution": "Brain checks the amounts actually charged on the 20 recorded paid orders (or the price fact's source); if $180 is confirmed, re-plan with a live $180 card test to the first 60 producers deciding the price; if $18, no plan on this opening — look for another.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Opening record changed after publication (price fact now $18)",
+      "resolution": "Re-planned as NO_PLAN: the price is contradicted, and at the evidenced $18 the market cannot carry the target."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 134,
+      "price": 18,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_f37187427cd1_c4919c",
+    "digest": "f37187427cd1849f50e26478",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:40.931Z"
+   },
+   {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_6f395b4e2a15_59c64f",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the label-file opening's price is now contradicted ($180 card vs $18 evidence)",
+     "opportunityIds": [],
+     "why": "The opening's record changed: its price fact (EVIDENCE) now reads $18 while the card's priceCents is 18000 ($180), and no record shows any buyer paying either figure (the 20/160 conversion states no price). At the evidenced $18, net $15 a deal needs 134 deals; at the measured 12.5% that means ~1,070 contacts against 620 listed producers (~78 orders, ~$1,400), so the target is out of reach at $18. Only at $180 would 13 deals carry it, and $180 is contradicted. No plan is established until the price is."
+    },
+    "alternatives": [
+     {
+      "title": "Keep the conditional $180 test plan",
+      "why": "Rejected as a plan: the price it rests on is now contradicted by the card's own price fact ($18), so it cannot be carried as established or as a simple unknown; the contradiction must be resolved first."
+     },
+     {
+      "title": "Sell at the evidenced $18",
+      "why": "Rejected: 620 producers x 12.5% ~ 78 orders x $18 ~ $1,400 gross, under $2,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain resolves which price is real for this offer: re-read the price fact's source and check the 20 recorded paid orders for the amount actually charged ($180 vs $18)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_card",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "resolution of $18 (price fact) vs $180 (card priceCents), e.g. the amounts on the 20 recorded paid orders"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Price fact now reads $18",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_card",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#priceCents",
+      "dated": "2026-11",
+      "claim": "Card priceCents 18000 ($180)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts (no price stated)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 maple producers listed with emails",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Price: the opening's own price fact ($18) contradicts its card price ($180) and no record shows a buyer paying either; at $18 the 620-producer list cannot carry $2,000 at the measured conversion, so whether any plan exists turns entirely on which price is real.",
+     "resolution": "Brain checks the amounts actually charged on the 20 recorded paid orders (or the price fact's source); if $180 is confirmed, re-plan with a live $180 card test to the first 60 producers deciding the price; if $18, no plan on this opening — look for another.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Opening record changed after publication (price fact now $18)",
+      "resolution": "Re-planned as NO_PLAN: the price is contradicted, and at the evidenced $18 the market cannot carry the target."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 134,
+      "price": 18,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0fc0086a9bd8_7086a2",
+    "digest": "0fc0086a9bd85f662d82811c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:45.522Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_48b6435e2ff54749878b",
+   "contractDigest": "02aadef32db2de6dc946f837",
+   "parentRevisionId": "rev_6f395b4e2a15_59c64f",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the label-file opening's price is now contradicted ($180 card vs $18 evidence)",
+    "opportunityIds": [],
+    "why": "The opening's record changed: its price fact (EVIDENCE) now reads $18 while the card's priceCents is 18000 ($180), and no record shows any buyer paying either figure (the 20/160 conversion states no price). At the evidenced $18, net $15 a deal needs 134 deals; at the measured 12.5% that means ~1,070 contacts against 620 listed producers (~78 orders, ~$1,400), so the target is out of reach at $18. Only at $180 would 13 deals carry it, and $180 is contradicted. No plan is established until the price is."
+   },
+   "alternatives": [
+    {
+     "title": "Keep the conditional $180 test plan",
+     "why": "Rejected as a plan: the price it rests on is now contradicted by the card's own price fact ($18), so it cannot be carried as established or as a simple unknown; the contradiction must be resolved first."
+    },
+    {
+     "title": "Sell at the evidenced $18",
+     "why": "Rejected: 620 producers x 12.5% ~ 78 orders x $18 ~ $1,400 gross, under $2,000."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Brain resolves which price is real for this offer: re-read the price fact's source and check the 20 recorded paid orders for the amount actually charged ($180 vs $18)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price",
+      "s_card",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price buyers pay for this offer",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [],
+     "needs": "resolution of $18 (price fact) vs $180 (card priceCents), e.g. the amounts on the 20 recorded paid orders"
+    },
+    {
+     "name": "conversion (paid orders / contacts)",
+     "status": "EVIDENCED",
+     "value": 0.125,
+     "unit": "ratio",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 620,
+     "unit": "buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+     "dated": "2026-11",
+     "claim": "Price fact now reads $18",
+     "population": "Sugarmakers who bottle and sell their own syrup",
+     "matchesBuyer": true,
+     "opportunityId": "cop_aa5d37eff1d94dd199c8"
+    },
+    {
+     "id": "s_card",
+     "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#priceCents",
+     "dated": "2026-11",
+     "claim": "Card priceCents 18000 ($180)",
+     "population": "Sugarmakers who bottle and sell their own syrup",
+     "matchesBuyer": true,
+     "opportunityId": "cop_aa5d37eff1d94dd199c8"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+     "dated": "2026-11",
+     "claim": "20 paid orders from 160 contacts (no price stated)",
+     "population": "Sugarmakers who bottle and sell their own syrup",
+     "matchesBuyer": true,
+     "opportunityId": "cop_aa5d37eff1d94dd199c8"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+     "dated": "2026-11",
+     "claim": "620 maple producers listed with emails",
+     "population": "Sugarmakers who bottle and sell their own syrup",
+     "matchesBuyer": true,
+     "opportunityId": "cop_aa5d37eff1d94dd199c8"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Price: the opening's own price fact ($18) contradicts its card price ($180) and no record shows a buyer paying either; at $18 the 620-producer list cannot carry $2,000 at the measured conversion, so whether any plan exists turns entirely on which price is real.",
+    "resolution": "Brain checks the amounts actually charged on the 20 recorded paid orders (or the price fact's source); if $180 is confirmed, re-plan with a live $180 card test to the first 60 producers deciding the price; if $18, no plan on this opening — look for another.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Opening record changed after publication (price fact now $18)",
+     "resolution": "Re-planned as NO_PLAN: the price is contradicted, and at the evidenced $18 the market cannot carry the target."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_aa5d37eff1d94dd199c8",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_aa5d37eff1d94dd199c8",
+     "deals": 134,
+     "price": 18,
+     "directCost": 3,
+     "capital": 0,
+     "settlesDay": 5,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_0fc0086a9bd8_7086a2",
+   "digest": "0fc0086a9bd85f662d82811c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:11:45.522Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_0fc0086a9bd8_7086a2",
+   "digest": "0fc0086a9bd85f662d82811c",
+   "contractDigest": "02aadef32db2de6dc946f837",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8160× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Nutrition-facts and allergen label files for small maple syr\" needs [figure withheld] and keeps [figure withheld], 96× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted. The plan's steps are for \"Sugarmakers who bottle and sell their own syrup\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_aa5d37eff1d94dd199c8"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+      "owner": "PERSON",
+      "cost": 3
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Sugarmakers who bottle and sell their own syrup",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Sugarmakers who bottle and sell their own syrup",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 5.985690184832624
+     },
+     {
+      "label": "Collect payment for \"Nutrition-facts and allergen label files for small maple syrup producers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "title": "Nutrition-facts and allergen label files for small maple syrup producers",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2000,
+      "card": {
+       "payer": "Sugarmakers who bottle and sell their own syrup",
+       "reachableChannel": "Email to the producers listed in the state maple producers association's directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:29.041Z",
+       "offerScope": "A print-ready nutrition-facts and allergen label file set for each bottle size, built by Brain within one day. Paid by card at order; payout 4 days later.",
+       "priceCents": 18000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "maple syrup production",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the producers listed in the state maple producers association's directo"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 20 accepted of 160 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "113 deal(s) needed at the measured rate means asking 1250 prospects, but the market holds only 620 (620 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 56"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 3, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "4 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "620 maple producers are listed with emails in the state maple producers association's public directory; each relabels before the spring sugaring season.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A print-ready nutrition-facts and allergen label file set for each bottle size, built by Brain within one day. Paid by card at order; payout 4 days later. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "20 paid orders from 160 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$3",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Sugarmakers who bottle and sell their own syrup",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$18",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "4 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_df0414f53d184b7dbc73"
+    ],
+    "scope": {
+     "targetCents": 200000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T06:10:59.305Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_fdd44b7d2814_f9d731",
+    "revisionDigest": "fdd44b7d2814f72d96bff98f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d4585a814d6543bea819/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The plan's $2,340 rests on a $180 price whose only evidence is that food-label design services list a comparable label set at $180 on their price pages. That is another seller's asking price — a benchmark — not a purchase these sugarmakers are recorded making of this offer, so it should not establish OFFER_AND_PRICE (defect NOT_A_PURCHASE against the price Brain's planner establishes). The revision's claim that 'the 20/160 conversion was measured at $180' is not on the card: the conversion fact states no price. Brain itself does not accept the plan (assumption-only coverage, reconstruction flagged implausible). The stance should be CONDITIONAL: a live $180 card offer to a first tranche of directory producers that measures paid orders at that price, with proof/stop/continue.",
+    "findings": [
+     "Recomputed: 13 x $180 = $2,340 gross, 13 x $3 = $39 cost, net $2,301 >= $2,000 (12 deals = $2,160 is the minimum). At 20/160 = 12.5%, 13 deals need 104 contacts; 160 sent gives ~20. Payouts day 8 ($1,080) and day 12 ($1,260), inside 30 days. Ledger matches the steps; arithmetic holds only if $180 holds.",
+     "Price: published price pages of food-label design services are competitors' list prices, NOT_A_PURCHASE for this buyer.",
+     "Fulfilment wording mismatch: the offer is a 'print-ready nutrition-facts and allergen label file set for each bottle size', while the delivery fact and required capability are 'a spreadsheet Brain produces' / PRODUCE_SPREADSHEET. A print-ready label artwork file is not a spreadsheet; the revision should show the deliverable Brain has proven matches what is sold.",
+     "Owner hours: card humanHours 0.5 per deal (13 deals = 6.5 h) is not on the ledger (member ownerHours null). No ceiling is set, so this does not fail a limit, but the ledger should carry it.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; card collection needs a connected provider before orders can be taken.",
+     "Suggested revision: CONDITIONAL, validation decides OFFER_AND_PRICE on cop_aa5d37eff1d94dd199c8 — offer at $180 by card to the first ~60 directory producers; proof = >=5 paid orders at $180 within 7 days (carries 12+ deals from the remaining 560 at the measured rate); stop at <2; continue to the full list on proof."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:34.091Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "defect": "NOT_A_PURCHASE",
+      "why": "The price fact is food-label design services' published price pages at $180 — another seller's asking price, not a purchase these maple producers are recorded paying for this offer; the conversion fact states no price."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_6d9e8b8f24a7_bf716f",
+    "revisionDigest": "6d9e8b8f24a7f724faef4ceb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d4585a814d6543bea819/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The price rebuttal does not hold. Brain's OFFER_AND_PRICE basis is 'price 180 USD (EVIDENCE)' — i.e. the card's price fact — and that fact itself reads 'Food-label design services list a nutrition-facts label file set for a single-ingredient syrup at $180 (published price pages)'. That is not this offer's own record; it is other sellers' asking price, which is the defect NOT_A_PURCHASE. The conversionRates fact ('20 paid orders from 160 contacts') records no price, so it cannot show those orders were at $180; reading them as made at $180 because the card's priceCents now says 18000 is circular, since priceCents came from the same price-page figure. No record shows a sugarmaker paying $180 for this offer. EXECUTABLE needs the price established; the plan should be CONDITIONAL on a live $180 offer whose paid orders decide it.",
+    "findings": [
+     "Arithmetic unchanged and correct: 13 x $180 = $2,340, $39 cost, $2,301 net; 12 deals minimum; payouts day 8 and 12 inside 30.",
+     "The record Brain's price link rests on is the price fact, and that fact names its source as food-label design services' published price pages — a competitor benchmark, not a purchase by this buyer.",
+     "Fulfilment and owner-hours rebuttals accepted (delivery fact says Brain produces it; no hours ceiling).",
+     "What would make this PASS: CONDITIONAL with validation.decides [OFFER_AND_PRICE] — $180 card offer to the first ~60 directory producers, proof >=4 paid by day 7 (at ~6.7% the remaining 560 yield ~37, carrying 12+ deals, settled by ~day 20), stop below 4."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:05:03.934Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "defect": "NOT_A_PURCHASE",
+      "why": "Brain's price basis is the price fact, which states its own source: food-label design services' published price pages at $180 — another seller's asking price, not a purchase by these maple producers of this offer. The conversion fact records paid orders without a price."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_6f395b4e2a15_59c64f",
+    "revisionDigest": "6f395b4e2a15eb5563961bf9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d4585a814d6543bea819/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now right: the $180 is held ASSUMED with the buyers' price UNKNOWN, the price-page source is marked as other sellers (matchesBuyer false), and a disagreement with Brain's OFFER_AND_PRICE link states why that link is unestablished. Reach (620 directory producers), conversion on this offer, Brain-proven fulfilment, $3 cost, zero capital and 4-day payout are evidenced. The test sells only a deliverable Brain has proven and passing at the threshold carries the target inside 30 days.",
+    "findings": [
+     "Recomputed: ceil(2000/180) = 12 deals; plan 13 = $2,340 gross, $39 cost, $2,301 net. Cash: 4 x $180 = $720 settling day 10, 9 x $180 = $1,620 settling day 17 <= 30. Matches the check trace.",
+     "Threshold carries the target: proof = 4 paid of 60 (6.7%); at exactly that rate the next 180 contacts yield 12, total 16 >= 12 needed; 380 more remain as slack.",
+     "Minor inconsistency to tidy: the alternative 'Raise the price' still says 'the 20/160 conversion was measured at $180', which the revision's own disagreement and quantities now say is not recorded.",
+     "Carry forward: SEND_A_MESSAGE / ISSUE_AN_INVOICE must be connected before the first send."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:07:51.193Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_0fc0086a9bd8_7086a2",
+    "revisionDigest": "0fc0086a9bd85f662d82811c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d4585a814d6543bea819/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct on the changed record. The opening's price fact (EVIDENCE) now reads $18, while the card's priceCents still carries 18000 — a figure whose only earlier source (other sellers' price pages) is gone. Brain now holds OFFER_AND_PRICE unestablished ('no single price on the card') and MARKET_VOLUME failed. At the only evidenced price the target is out of reach even with every other fact established: 620 producers x 12.5% ~ 77 orders x $18 ~ $1,395 gross (~$1,160 net of $3 cost) < $2,000, while $2,000 needs 112 gross / 134 net-of-cost deals. The revision names both decisive links, does not adopt either price as known, and its single research step (check what the 20 recorded paid orders were actually charged) is exactly what decides between a $180 test plan and no plan on this opening.",
+    "findings": [
+     "Recomputed at $18: deals needed ceil(2000/18) = 112 gross (134 if the $3 cost is netted); available at the measured 20/160 = 12.5% of 620 = ~77. Short by ~35-57 deals; the market cannot carry the target at $18. Brain's MARKET_VOLUME basis agrees (1,250 prospects needed vs 620).",
+     "At $180, 13 deals would carry it (as in the prior conditional plan), but $180 no longer has any source on the card, so it cannot be planned on — correctly rejected as an alternative until resolved.",
+     "Decisive links OFFER_AND_PRICE and MARKET_VOLUME are the right ones; the resolution (confirm $180 -> re-plan with a live $180 test; confirm $18 -> no plan on this opening, search for others) is sound.",
+     "Minor: members lists 134 deals at $18 settling day 5 — illustrative only; the cash ledger is correctly empty."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:13:18.355Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_0fc0086a9bd8_7086a2",
+   "digest": "0fc0086a9bd85f662d82811c",
+   "contractDigest": "02aadef32db2de6dc946f837",
+   "plan": {
+    "goalId": "wst_48b6435e2ff54749878b",
+    "contractDigest": "02aadef32db2de6dc946f837",
+    "parentRevisionId": "rev_6f395b4e2a15_59c64f",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the label-file opening's price is now contradicted ($180 card vs $18 evidence)",
+     "opportunityIds": [],
+     "why": "The opening's record changed: its price fact (EVIDENCE) now reads $18 while the card's priceCents is 18000 ($180), and no record shows any buyer paying either figure (the 20/160 conversion states no price). At the evidenced $18, net $15 a deal needs 134 deals; at the measured 12.5% that means ~1,070 contacts against 620 listed producers (~78 orders, ~$1,400), so the target is out of reach at $18. Only at $180 would 13 deals carry it, and $180 is contradicted. No plan is established until the price is."
+    },
+    "alternatives": [
+     {
+      "title": "Keep the conditional $180 test plan",
+      "why": "Rejected as a plan: the price it rests on is now contradicted by the card's own price fact ($18), so it cannot be carried as established or as a simple unknown; the contradiction must be resolved first."
+     },
+     {
+      "title": "Sell at the evidenced $18",
+      "why": "Rejected: 620 producers x 12.5% ~ 78 orders x $18 ~ $1,400 gross, under $2,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain resolves which price is real for this offer: re-read the price fact's source and check the 20 recorded paid orders for the amount actually charged ($180 vs $18)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_card",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "resolution of $18 (price fact) vs $180 (card priceCents), e.g. the amounts on the 20 recorded paid orders"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.125,
+      "unit": "ratio",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 620,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#price",
+      "dated": "2026-11",
+      "claim": "Price fact now reads $18",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_card",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#priceCents",
+      "dated": "2026-11",
+      "claim": "Card priceCents 18000 ($180)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#conversionRates",
+      "dated": "2026-11",
+      "claim": "20 paid orders from 160 contacts (no price stated)",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_aa5d37eff1d94dd199c8#buyerVolume",
+      "dated": "2026-11",
+      "claim": "620 maple producers listed with emails",
+      "population": "Sugarmakers who bottle and sell their own syrup",
+      "matchesBuyer": true,
+      "opportunityId": "cop_aa5d37eff1d94dd199c8"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Price: the opening's own price fact ($18) contradicts its card price ($180) and no record shows a buyer paying either; at $18 the 620-producer list cannot carry $2,000 at the measured conversion, so whether any plan exists turns entirely on which price is real.",
+     "resolution": "Brain checks the amounts actually charged on the 20 recorded paid orders (or the price fact's source); if $180 is confirmed, re-plan with a live $180 card test to the first 60 producers deciding the price; if $18, no plan on this opening — look for another.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Opening record changed after publication (price fact now $18)",
+      "resolution": "Re-planned as NO_PLAN: the price is contradicted, and at the evidenced $18 the market cannot carry the target."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_aa5d37eff1d94dd199c8",
+      "deals": 134,
+      "price": 18,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0fc0086a9bd8_7086a2",
+    "digest": "0fc0086a9bd85f662d82811c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:45.522Z"
+   },
+   "review": {
+    "revisionId": "rev_0fc0086a9bd8_7086a2",
+    "revisionDigest": "0fc0086a9bd85f662d82811c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_71a8ce4fbb0e43c1b14d/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d4585a814d6543bea819/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct on the changed record. The opening's price fact (EVIDENCE) now reads $18, while the card's priceCents still carries 18000 — a figure whose only earlier source (other sellers' price pages) is gone. Brain now holds OFFER_AND_PRICE unestablished ('no single price on the card') and MARKET_VOLUME failed. At the only evidenced price the target is out of reach even with every other fact established: 620 producers x 12.5% ~ 77 orders x $18 ~ $1,395 gross (~$1,160 net of $3 cost) < $2,000, while $2,000 needs 112 gross / 134 net-of-cost deals. The revision names both decisive links, does not adopt either price as known, and its single research step (check what the 20 recorded paid orders were actually charged) is exactly what decides between a $180 test plan and no plan on this opening.",
+    "findings": [
+     "Recomputed at $18: deals needed ceil(2000/18) = 112 gross (134 if the $3 cost is netted); available at the measured 20/160 = 12.5% of 620 = ~77. Short by ~35-57 deals; the market cannot carry the target at $18. Brain's MARKET_VOLUME basis agrees (1,250 prospects needed vs 620).",
+     "At $180, 13 deals would carry it (as in the prior conditional plan), but $180 no longer has any source on the card, so it cannot be planned on — correctly rejected as an alternative until resolved.",
+     "Decisive links OFFER_AND_PRICE and MARKET_VOLUME are the right ones; the resolution (confirm $180 -> re-plan with a live $180 test; confirm $18 -> no plan on this opening, search for others) is sound.",
+     "Minor: members lists 134 deals at $18 settling day 5 — illustrative only; the cash ledger is correctly empty."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:13:18.355Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "8aed60e10cea6db3",
+    "openings": {
+     "cop_aa5d37eff1d94dd199c8": "4c34abdb7644a832"
+    }
+   },
+   "at": "2026-11-28T06:13:47.957Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

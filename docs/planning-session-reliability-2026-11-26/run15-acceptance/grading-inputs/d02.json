@@ -1,0 +1,461 @@
+{
+ "caseId": "aw-02-named-industry-trucking",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: 2027 UCR registration filing s + Owner-run truck dispatching fo + New-entrant safety program doc\", and what it is missing first is an offer and a price. Research first: the deep dives on \"New-entrant safety program document package for newly author\", \"Owner-run truck dispatching for owner-operators, flat weekly\", \"2027 UCR registration filing service before the Dec 31 deadl\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 3 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Sell \"New-entrant safety program document package for newly authorized small carriers\" through a partner who already…; Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 75.9% (p50 $14,637): a hypothesis to test by running each one's kill criterion, not evidence.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_7a12f0470d2f458b8d6e",
+   "cop_33f9d4f7f28d406e8c1c",
+   "cop_13a75427d8b5418bae12"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"New-entrant safety program document package for newly author\", \"Owner-run truck dispatching for owner-operators, flat weekly\", \"2027 UCR registration filing service before the Dec 31 deadl\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_33f9d4f7f28d406e8c1c",
+    "title": "Owner-run truck dispatching for owner-operators, flat weekly fee",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "Owner-operators and 1-5 truck fleets without a dispatcher",
+     "reachableChannel": "Trucker forums, Facebook groups, FMCSA census cold calls",
+     "offerScope": "Load finding and broker negotiation for a flat $250/week per truck",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 20000,
+     "humanHours": 10,
+     "requiredCapabilities": [],
+     "industry": "trucking",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Trucker forums, Facebook groups, FMCSA census cold calls"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 45, tied up 200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "8 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Trucker forums, Facebook groups, FMCSA census cold calls",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Load finding and broker negotiation for a flat $250/week per truck to Owner-operators and 1-5 truck fleets without a dispatcher, reached through Trucker forums, Facebook groups, FMCSA census cold calls, at $250; Owner as dispatcher (load boards) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$45",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner as dispatcher (load boards).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "10 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Load finding and broker negotiation for a flat $250/week per truck",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner-operators and 1-5 truck fleets without a dispatcher",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freightwaves.com/news/a-practical-guide-to-truck-dispatching-services; https://dat.com/solutions/owner-operator-dispatch-services; https://www.freightwaves.com/news/trucker-path-moves-into-dispatching-opens-with-dozen-dispatchers",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "8 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_13a75427d8b5418bae12",
+    "title": "2027 UCR registration filing service before the Dec 31 deadline",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 75,
+    "card": {
+     "payer": "Interstate carriers with 0-20 trucks not yet registered for 2027 UCR",
+     "reachableChannel": "Cold email/phone to carriers from FMCSA census data",
+     "offerScope": "File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee",
+     "priceCents": 7500,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 20000,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "trucking compliance",
+     "mechanism": "TEMPORARY_EXPLOIT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email/phone to carriers from FMCSA census data"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 75 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 3, tied up 200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "3 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email/phone to carriers from FMCSA census data",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee to Interstate carriers with 0-20 trucks not yet registered for 2027 UCR, reached through Cold email/phone to carriers from FMCSA census data, at $75; Owner files on plan.ucr.gov with carrier data delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner files on plan.ucr.gov with carrier data.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "File 2027 UCR (and MCS-150 update) for the carrier; $75 service fee plus pass-through government fee",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Interstate carriers with 0-20 trucks not yet registered for 2027 UCR",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$75",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$75",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/html/2026-17893.htm; https://landline.media/ucr-fee-season-pay-the-fund-not-the-hustlers/; https://www.freightwaves.com/?p=584916",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_7a12f0470d2f458b8d6e",
+    "title": "New-entrant safety program document package for newly authorized small carriers",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit",
+     "reachableChannel": "FMCSA register of newly granted authorities (public), cold email/phone from the owner",
+     "offerScope": "Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain",
+     "priceCents": 32500,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 30000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "trucking compliance",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: FMCSA register of newly granted authorities (public), cold email/phone from the "
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 325 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "76 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "19 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 10, tied up 300"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "FMCSA register of newly granted authorities (public), cold email/phone from the owner",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "5,000 Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit (FTR: just over 5,000 new carriers authorized in October 2025; 2026 counts reportedly about halved by identity verification)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain to Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit, reached through FMCSA register of newly granted authorities (public), cold email/phone from the owner, at $325; The owner assembles and customizes the package from regulatory templates delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner assembles and customizes the package from regulatory templates.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Customized safety program: DQ file checklist and forms, drug & alcohol policy, HOS and maintenance file templates, audit-readiness checklist, drafted by Brain",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Newly authorized motor carriers with 1-19 trucks facing the FMCSA New Entrant Safety Audit",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$325",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$325",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.trucksafe.com/product-page/new-entrant-bundle; https://ai.fmcsa.dot.gov/newentrant/SafetyAudits.aspx; https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program; https://www.ryantrans.com/november-2025-industry-update-truckload-capacity-outlook; https://www.freightwaves.com/?p=536455",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T06:11:05.737Z"
+ }
+}

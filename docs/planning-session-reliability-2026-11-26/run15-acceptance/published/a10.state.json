@@ -1,0 +1,995 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_9132f56a5d4446bfbfb4",
+   "words": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 4000000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$40,000 of settled cash received within 30 days with no owner capital advanced",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "62c7eb8b71787d943caf9fbf"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_9132f56a5d4446bfbfb4",
+    "contractDigest": "62c7eb8b71787d943caf9fbf",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the monument-dealer list market is capped below the target",
+     "opportunityIds": [],
+     "why": "140 dealers in the directory, each buying at most one list package a season, at the established $149 price: even if every dealer bought, settled cash is at most $20,860, against a $40,000 target. At the measured 12-of-60 (20%) conversion the realistic figure is about 28 sales, $4,172."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the season list package to all 140 dealers",
+      "why": "Rejected as a plan for this target: its whole market tops out at $20,860; it is a plan only under a target of $20,860 or less."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Search for further openings (other buyer populations or repeat offers) outside the counted monument-dealer market",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol",
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable dealers",
+      "status": "EVIDENCED",
+      "value": 140,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "purchases per dealer per season",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "purchases",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 14900,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "market ceiling",
+      "status": "EVIDENCED",
+      "value": 2086000,
+      "unit": "cents",
+      "sources": [
+       "s_vol",
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#buyerVolume",
+      "dated": "2026-11",
+      "claim": "140 monument dealers listed in the state association directory; each buys at most one list package a season",
+      "population": "state monument builders association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#price",
+      "dated": "2026-11",
+      "claim": "Two lead-list services sell the package at $149",
+      "population": "monument dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#conversionRates",
+      "dated": "2026-11",
+      "claim": "12 paid orders from 60 contacts",
+      "population": "monument dealers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "MARKET_VOLUME: 140 counted dealers x one purchase a season x $149 = $20,860 at most, so 269 sales would be needed against 140 possible; the $40,000 target cannot be reached from this opening at any conversion rate.",
+     "resolution": "Lower the target to at most $20,860 (about $4,172 at the measured 20% conversion) and run the list package to the 140 dealers, or research additional buyer populations/openings outside this counted market before re-planning $40,000.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to $20,860 or less (the whole counted market at $149); about $4,172 is what the measured 20% conversion supports.",
+      "basis": [
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_e4f3bcf449cb_ca1814",
+    "digest": "e4f3bcf449cbf580e128a0e2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7d21f77a743348b78aee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:43.199Z"
+   },
+   {
+    "goalId": "wst_9132f56a5d4446bfbfb4",
+    "contractDigest": "62c7eb8b71787d943caf9fbf",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the monument-dealer list market is capped below the target",
+     "opportunityIds": [],
+     "why": "140 dealers in the directory, each buying at most one list package a season, at the established $149 price: even if every dealer bought, settled cash is at most $20,860, against a $40,000 target. At the measured 12-of-60 (20%) conversion the realistic figure is about 28 sales, $4,172."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the season list package to all 140 dealers",
+      "why": "Rejected as a plan for this target: its whole market tops out at $20,860; it is a plan only under a target of $20,860 or less."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Search for further openings (other buyer populations or repeat offers) outside the counted monument-dealer market",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol",
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable dealers",
+      "status": "EVIDENCED",
+      "value": 140,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "purchases per dealer per season",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "purchases",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 14900,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "market ceiling",
+      "status": "EVIDENCED",
+      "value": 2086000,
+      "unit": "cents",
+      "sources": [
+       "s_vol",
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#buyerVolume",
+      "dated": "2026-11",
+      "claim": "140 monument dealers listed in the state association directory; each buys at most one list package a season",
+      "population": "state monument builders association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#price",
+      "dated": "2026-11",
+      "claim": "Two lead-list services sell the package at $149",
+      "population": "monument dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#conversionRates",
+      "dated": "2026-11",
+      "claim": "12 paid orders from 60 contacts",
+      "population": "monument dealers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "MARKET_VOLUME: 140 counted dealers x one purchase a season x $149 = $20,860 at most, so 269 sales would be needed against 140 possible; the $40,000 target cannot be reached from this opening at any conversion rate.",
+     "resolution": "Lower the target to at most $20,860 (about $4,172 at the measured 20% conversion) and run the list package to the 140 dealers, or research additional buyer populations/openings outside this counted market before re-planning $40,000.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "deals": 269,
+      "price": 149,
+      "directCost": 2,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to $20,860 or less (the whole counted market at $149); about $4,172 is what the measured 20% conversion supports.",
+      "basis": [
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_68cfaf99591a_5b062e",
+    "digest": "68cfaf99591aa08f8a81be92",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7d21f77a743348b78aee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:53.770Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_9132f56a5d4446bfbfb4",
+   "contractDigest": "62c7eb8b71787d943caf9fbf",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the monument-dealer list market is capped below the target",
+    "opportunityIds": [],
+    "why": "140 dealers in the directory, each buying at most one list package a season, at the established $149 price: even if every dealer bought, settled cash is at most $20,860, against a $40,000 target. At the measured 12-of-60 (20%) conversion the realistic figure is about 28 sales, $4,172."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the season list package to all 140 dealers",
+     "why": "Rejected as a plan for this target: its whole market tops out at $20,860; it is a plan only under a target of $20,860 or less."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Search for further openings (other buyer populations or repeat offers) outside the counted monument-dealer market",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_vol",
+      "s_price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable dealers",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "purchases per dealer per season",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "purchases",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 14900,
+     "unit": "cents",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "market ceiling",
+     "status": "EVIDENCED",
+     "value": 2086000,
+     "unit": "cents",
+     "sources": [
+      "s_vol",
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.2,
+     "unit": "paid/contacts",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_5ebc182b0205413194cd#buyerVolume",
+     "dated": "2026-11",
+     "claim": "140 monument dealers listed in the state association directory; each buys at most one list package a season",
+     "population": "state monument builders association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5ebc182b0205413194cd"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_5ebc182b0205413194cd#price",
+     "dated": "2026-11",
+     "claim": "Two lead-list services sell the package at $149",
+     "population": "monument dealers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5ebc182b0205413194cd"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_5ebc182b0205413194cd#conversionRates",
+     "dated": "2026-11",
+     "claim": "12 paid orders from 60 contacts",
+     "population": "monument dealers contacted",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5ebc182b0205413194cd"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "MARKET_VOLUME: 140 counted dealers x one purchase a season x $149 = $20,860 at most, so 269 sales would be needed against 140 possible; the $40,000 target cannot be reached from this opening at any conversion rate.",
+    "resolution": "Lower the target to at most $20,860 (about $4,172 at the measured 20% conversion) and run the list package to the 140 dealers, or research additional buyer populations/openings outside this counted market before re-planning $40,000.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_5ebc182b0205413194cd",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_5ebc182b0205413194cd",
+     "deals": 269,
+     "price": 149,
+     "directCost": 2,
+     "capital": 0,
+     "settlesDay": 5,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to $20,860 or less (the whole counted market at $149); about $4,172 is what the measured 20% conversion supports.",
+     "basis": [
+      {
+       "opportunityId": "cop_5ebc182b0205413194cd",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_5ebc182b0205413194cd",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_68cfaf99591a_5b062e",
+   "digest": "68cfaf99591aa08f8a81be92",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7d21f77a743348b78aee/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:58:53.770Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_68cfaf99591a_5b062e",
+   "digest": "68cfaf99591aa08f8a81be92",
+   "contractDigest": "62c7eb8b71787d943caf9fbf",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $20,860, so they cannot reach the $40,000 still needed. To make it supportable, target: lower the target to about $20,860, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_5ebc182b0205413194cd"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "title": "Weekly list of recorded deaths matched to pre-purchased monuments needing final-date lettering, for monument dealers",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 20860,
+      "potentialReach": 29800,
+      "card": {
+       "payer": "Owners of monument and memorial dealers",
+       "reachableChannel": "Email to the dealers listed in the state monument builders association's directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:46.240Z",
+       "offerScope": "A season list package, compiled by Brain from public death records and cemetery permits. Paid by card; payout 3 days later.",
+       "priceCents": 14900,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "memorial monument dealers",
+       "mechanism": "INFORMATION_ASYMMETRY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the dealers listed in the state monument builders association's directo"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 149 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 12 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "141 deal(s) needed but only 140 in the window (140 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 2, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "140 monument dealers are listed in the state monument builders association's directory; each buys at most one list package a season.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A season list package, compiled by Brain from public death records and cemetery permits. Paid by card; payout 3 days later. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "12 paid orders from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$2",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of monument and memorial dealers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Two lead-list services sell a monument-dealer final-date lettering list package at $149 (listing pages, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 4000000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:56:17.493Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_68cfaf99591a_5b062e",
+    "revisionDigest": "68cfaf99591aa08f8a81be92",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7d21f77a743348b78aee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39ca299f5ff04382a723/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap the evidence decides: MARKET_VOLUME. The card's EVIDENCE buyerVolume counts the whole market (140 dealers in the state association directory, at most one package per season, so at most one each in 30 days). Recomputed: 140 x $149 = $20,860 < $40,000; reaching $40,000 at $149 needs 269 sales against 140 possible. This is a true constraint, not missing evidence: even every dealer buying cannot fit the target. To reach $40,000 from 140 single purchases the price would have to be >= $286, and no record shows any buyer paying more than $149. At the measured 20% conversion (12/60) the realistic figure is ~28 sales, $4,172. Brain's own planner agrees (NOT_VIABLE, ceiling $20,860). The revision correctly proposes no execution and points to research outside the counted market or a target <= $20,860.",
+    "findings": [
+     "Arithmetic checked: 140 x $149 = $20,860; $40,000 / $149 = 268.5 -> 269 deals; 0.2 x 140 x $149 = $4,172.",
+     "Price evidence is two lead-list services' listing price ($149), i.e. a benchmark of what others charge, not a recorded purchase by these buyers; the 12/60 paid orders do not state their price. It does not change the verdict (a price over $286 would be required and nothing supports it), but any later plan on this opening must establish the price paid by these dealers.",
+     "No steps spend money, ledger empty, owner capital $0: consistent with the $0 exposure cap.",
+     "Constraint suggestion (target <= $20,860) is honest, and the alternative of new buyer populations is correctly left as research rather than counted."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:09.022Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_68cfaf99591a_5b062e",
+   "digest": "68cfaf99591aa08f8a81be92",
+   "contractDigest": "62c7eb8b71787d943caf9fbf",
+   "plan": {
+    "goalId": "wst_9132f56a5d4446bfbfb4",
+    "contractDigest": "62c7eb8b71787d943caf9fbf",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the monument-dealer list market is capped below the target",
+     "opportunityIds": [],
+     "why": "140 dealers in the directory, each buying at most one list package a season, at the established $149 price: even if every dealer bought, settled cash is at most $20,860, against a $40,000 target. At the measured 12-of-60 (20%) conversion the realistic figure is about 28 sales, $4,172."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the season list package to all 140 dealers",
+      "why": "Rejected as a plan for this target: its whole market tops out at $20,860; it is a plan only under a target of $20,860 or less."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Search for further openings (other buyer populations or repeat offers) outside the counted monument-dealer market",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol",
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable dealers",
+      "status": "EVIDENCED",
+      "value": 140,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "purchases per dealer per season",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "purchases",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 14900,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "market ceiling",
+      "status": "EVIDENCED",
+      "value": 2086000,
+      "unit": "cents",
+      "sources": [
+       "s_vol",
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#buyerVolume",
+      "dated": "2026-11",
+      "claim": "140 monument dealers listed in the state association directory; each buys at most one list package a season",
+      "population": "state monument builders association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#price",
+      "dated": "2026-11",
+      "claim": "Two lead-list services sell the package at $149",
+      "population": "monument dealers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_5ebc182b0205413194cd#conversionRates",
+      "dated": "2026-11",
+      "claim": "12 paid orders from 60 contacts",
+      "population": "monument dealers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5ebc182b0205413194cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "MARKET_VOLUME: 140 counted dealers x one purchase a season x $149 = $20,860 at most, so 269 sales would be needed against 140 possible; the $40,000 target cannot be reached from this opening at any conversion rate.",
+     "resolution": "Lower the target to at most $20,860 (about $4,172 at the measured 20% conversion) and run the list package to the 140 dealers, or research additional buyer populations/openings outside this counted market before re-planning $40,000.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5ebc182b0205413194cd",
+      "deals": 269,
+      "price": 149,
+      "directCost": 2,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to $20,860 or less (the whole counted market at $149); about $4,172 is what the measured 20% conversion supports.",
+      "basis": [
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_5ebc182b0205413194cd",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_68cfaf99591a_5b062e",
+    "digest": "68cfaf99591aa08f8a81be92",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7d21f77a743348b78aee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:53.770Z"
+   },
+   "review": {
+    "revisionId": "rev_68cfaf99591a_5b062e",
+    "revisionDigest": "68cfaf99591aa08f8a81be92",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7d21f77a743348b78aee/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39ca299f5ff04382a723/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap the evidence decides: MARKET_VOLUME. The card's EVIDENCE buyerVolume counts the whole market (140 dealers in the state association directory, at most one package per season, so at most one each in 30 days). Recomputed: 140 x $149 = $20,860 < $40,000; reaching $40,000 at $149 needs 269 sales against 140 possible. This is a true constraint, not missing evidence: even every dealer buying cannot fit the target. To reach $40,000 from 140 single purchases the price would have to be >= $286, and no record shows any buyer paying more than $149. At the measured 20% conversion (12/60) the realistic figure is ~28 sales, $4,172. Brain's own planner agrees (NOT_VIABLE, ceiling $20,860). The revision correctly proposes no execution and points to research outside the counted market or a target <= $20,860.",
+    "findings": [
+     "Arithmetic checked: 140 x $149 = $20,860; $40,000 / $149 = 268.5 -> 269 deals; 0.2 x 140 x $149 = $4,172.",
+     "Price evidence is two lead-list services' listing price ($149), i.e. a benchmark of what others charge, not a recorded purchase by these buyers; the 12/60 paid orders do not state their price. It does not change the verdict (a price over $286 would be required and nothing supports it), but any later plan on this opening must establish the price paid by these dealers.",
+     "No steps spend money, ledger empty, owner capital $0: consistent with the $0 exposure cap.",
+     "Constraint suggestion (target <= $20,860) is honest, and the alternative of new buyer populations is correctly left as research rather than counted."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:09.022Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "ce48c92ca67d83a4",
+    "openings": {
+     "cop_5ebc182b0205413194cd": "dc68eedd1a13358d"
+    }
+   },
+   "at": "2026-11-28T06:01:49.175Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

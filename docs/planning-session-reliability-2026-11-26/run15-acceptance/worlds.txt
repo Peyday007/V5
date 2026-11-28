@@ -1,0 +1,16 @@
+a01 av-01-winery-dtc-reports-executable cases/cases.json
+a02 av-02-vending-audit-price-only-said cases/cases.json
+a03 av-03-plumbing-medgas-no-verifier cases/cases.json
+a04 av-04-livestock-auction-one-sound cases/cases.json
+a05 av-05-water-well-paid-net-45 cases/cases.json
+a06 av-06-dry-cleaner-perc-owner-hours cases/cases.json
+a07 av-07-maple-label-price-contradicted cases/cases.json
+a08 av-08-yoga-owner-teaches-over-hours cases/cases.json
+a09 av-09-propane-leak-checks-net cases/cases.json
+a10 av-10-monument-list-market-too-small cases/cases.json
+a11 av-11-welding-objective-narrowed cases/cases.json
+a12 av-12-museum-grant-as-price cases/cases.json
+d01 aw-01-small-target-owner-hours cases/discovery-worlds.json
+d02 aw-02-named-industry-trucking cases/discovery-worlds.json
+d03 aw-03-large-target-with-capital cases/discovery-worlds.json
+d04 aw-04-short-window-no-capital cases/discovery-worlds.json

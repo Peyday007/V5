@@ -1,0 +1,175 @@
+{
+ "caseId": "av-03-plumbing-medgas-no-verifier",
+ "keys": {
+  "cop_8c529faa96794fba9c19": "medGas"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Third-party medical-gas system verification for plumbing con\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4200× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Project managers at commercial plumbing contrac\" needs [figure withheld] and keeps [figure withheld], 337× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Third-party medical-gas system verification for plumbing contractors f\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_8c529faa96794fba9c19"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+    "owner": "PERSON",
+    "cost": 1400
+   },
+   {
+    "label": "Collect payment for \"Third-party medical-gas system verification for plumbing contractors finishing c\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish who would do the work for \"Third-party medical-gas system verification for plumbing contractors finishing c\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+  "openings": [
+   {
+    "opportunityId": "cop_8c529faa96794fba9c19",
+    "title": "Third-party medical-gas system verification for plumbing contractors finishing clinic build-outs",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Project managers at commercial plumbing contractors",
+     "reachableChannel": "The three project managers, who signed by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:06.237Z",
+     "offerScope": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+     "priceCents": 280000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "plumbing contractors",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 280000,
+      "currency": "USD",
+      "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 280000,
+      "currency": "USD",
+      "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 280000,
+      "currency": "USD",
+      "deliverable": "On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three project managers, who signed by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 8400 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 8400 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1400, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "15 days to usable cash against 40 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell On-site verification of a single-zone outpatient clinic medical-gas system before occupancy. It must be performed by a certified medical-gas verifier; none has been engaged or quoted, and Brain cannot perform on-site testing. Contractors pay 15 days after the verification report. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1400",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Project managers at commercial plumbing contractors",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Published rate sheets of two regional medical-gas verifiers quote $2,800 for verifying a single-zone outpatient clinic system (2026-10).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "15 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_2df03a9ab3d94d2cb86c"
+  ],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 40,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:55:43.413Z"
+ }
+}

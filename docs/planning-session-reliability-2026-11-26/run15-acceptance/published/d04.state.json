@@ -1,0 +1,3701 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_fdff30da3834458fb7d2",
+   "words": "Get me $1,000 of cash in hand within 14 days, with no money in.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 100000,
+    "currency": "USD",
+    "metric": "COLLECTED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$1,000 cash in hand within 14 days with no money put in",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "ccd96a9e3d5569ba1aa7d02b"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_fdff30da3834458fb7d2",
+    "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Owner does paid AI-training evaluation work on DataAnnotation ($25/h published floor) for ~40 hours, paid out to PayPal inside the 14 days",
+     "opportunityIds": [
+      "cop_56436a0c43754342be51"
+     ],
+     "why": "It is the only discovered route with zero capital, zero direct cost and a published, verified pay rate ($25-$50/h, PayPal, deposits within a few days of a request). $1,000 = 40 hours at the $25 floor. What is not established is whether the owner is approved and whether 40 hours of tasks are offered inside the window; a free 5-day test measures both before the bulk of the hours are spent."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-sent emails selling a $500 website to local businesses, built by a Fiverr designer",
+      "why": "Price is only a vendor range ($100-$5,000), close rate from cold email unknown, and paying the designer before the buyer's PayPal funds clear (held up to 21 days / 7 days after completion for new sellers) breaks the no-money-in limit."
+     },
+     {
+      "title": "Bid on Freelancer.com website requests, owner builds",
+      "why": "Free plan gives 6 bids a month against 17-490 competing bids; posted business-site budgets are ~$150-$450 (INR 12,500-37,500); 3+ wins plus build and milestone release inside 14 days is not credible."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner applies to DataAnnotation and completes the Starter Assessment",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1src"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Validation: approval notice and count of paid task hours offered on the dashboard by day 5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_approval",
+       "q_hours"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Owner performs 40 hours of evaluation tasks at the $25/h floor (days 3-10)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "s1src",
+       "q_rate"
+      ],
+      "ownerHours": 40,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Request PayPal payouts on day 7 and day 10 (deposits within a few days)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "s1src"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "First payout: ~16 hours at $25",
+      "settlesDay": 10,
+      "stepId": "s4"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "Second payout: ~24 hours at $25",
+      "settlesDay": 13,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "hourly pay rate (published floor)",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD/hour",
+      "sources": [
+       "s1src"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner approved after Starter Assessment",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "yes/no",
+      "sources": [],
+      "needs": "approval notice by day 5"
+     },
+     {
+      "name": "paid task hours offered within window",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [
+       "s1src"
+      ],
+      "needs": ">= 40 hours of tasks offered by day 10"
+     },
+     {
+      "name": "payout deposit delay",
+      "status": "ESTIMATE",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s1src"
+      ],
+      "needs": "first payout request on day 7 confirms it"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1src",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026 (page (c) 2026; read 2026-11-28)",
+      "claim": "General projects start at $25-$50/h; paid via PayPal; deposits within a few days of a request; approval within a few days of the Starter Assessment; work availability depends on demand and performance",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_56436a0c43754342be51"
+     },
+     {
+      "id": "s1card",
+      "url": "https://brain.local/card/cop_56436a0c43754342be51#revenueRange",
+      "dated": "2026-11-28",
+      "claim": "Verified research: $25-$50/h, PayPal, deposits within a few days",
+      "population": "DataAnnotation",
+      "matchesBuyer": true,
+      "opportunityId": "cop_56436a0c43754342be51"
+     },
+     {
+      "id": "s2src",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Small business website $100 to $5,000 (vendor range)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "s3src",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website (Clutch survey of 406)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "s4src",
+      "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+      "dated": "2026-11-28",
+      "claim": "New-seller payments above a monthly amount held up to 21 days",
+      "population": "PayPal sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "s5src",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design jobs; business-site average bids $214-$457 with 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "s6src",
+      "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "s7src",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Free members get 6 bids per month; 10% project fee",
+      "population": "Freelancer.com freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_2d044510d3494b649398"
+     }
+    ],
+    "validation": {
+     "proof": "By day 5 the owner holds an approval notice and the dashboard offers at least 20 hours of paid tasks; by day 7 a first payout request is made",
+     "stop": [
+      "No approval notice by day 5",
+      "Fewer than 10 paid task hours offered by day 6",
+      "First payout not deposited by day 11"
+     ],
+     "continue": [
+      "Approved and >= 20 task hours offered by day 5: work the remaining hours and request payouts on days 7 and 10"
+     ],
+     "decides": [
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "deals": 40,
+      "price": 25,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 13,
+      "ownerHours": 43.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card's revenueRange is now EVIDENCE: verified research quoting DataAnnotation's own FAQ, 'Starting at $25-$50 per hour' for general projects; $25/h is the payer's published floor, not a guess."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and capital are both $0 against a published $25/h rate, so every paid hour is positive contribution; nothing is tied up."
+     }
+    ],
+    "revisionId": "rev_84ec3c7b8e07_e242fd",
+    "digest": "84ec3c7b8e078b02e1dd4c80",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:03:47.421Z"
+   },
+   {
+    "goalId": "wst_fdff30da3834458fb7d2",
+    "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Owner emails local service businesses that have no website, offering a $500 3-page site he builds himself with a free AI builder, 50% deposit by Zelle; two sales carry the $1,000",
+     "opportunityIds": [
+      "cop_c77c549c5f3a4f7383ee"
+     ],
+     "why": "It is the only discovered route that needs no money in at all: free Gmail outreach, a free-tier builder, the owner as fulfiller, and Zelle/PayPal collection. 17% of US small businesses have no website (Clutch, Aug 2025) and agency guides price a small-business site at $100-$5,000, but nobody has shown these buyers paying $500 to a cold emailer or how many say yes. A zero-cost 5-day test (150 emails, a paid deposit as the only pass) measures exactly that before more than ~8 owner hours are spent."
+    },
+    "alternatives": [
+     {
+      "title": "Same offer, fulfilled by a Fiverr designer (~$150-$250)",
+      "why": "The designer must be paid before a new seller's PayPal funds clear (held 7-21 days), which breaks the no-money-in limit; only viable once a deposit has cleared."
+     },
+     {
+      "title": "Bid on Freelancer.com website requests",
+      "why": "6 free bids a month against 17-490 competing bids, budgets ~$140-$420 (INR 12,500-37,500); 3+ awards plus milestone release in 14 days is not credible."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Set aside: its revenue is a wage for the owner's labour, not a price a buyer pays for an offer."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner lists 450 local service businesses with no website on Google Maps and emails 150 of them from his own Gmail (days 0-3)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer: 3-page site live in 2 days, $500, 50% deposit by Zelle/PayPal",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: at least 1 paid $250 deposit from the first 150 contacts by day 5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Continue outreach to the remaining 300 contacts and close the second sale (days 5-9)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site on a free-tier AI builder (~6 hours each)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect the 50% balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 deposit (Zelle)",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 balance on delivery (Zelle)",
+      "settlesDay": 8,
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 deposit (Zelle)",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 balance on delivery (Zelle)",
+      "settlesDay": 12,
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "a buyer paying the deposit at $500"
+     },
+     {
+      "name": "close rate from owner cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 1 paid deposit from 150 contacts by day 5"
+     },
+     {
+      "name": "contacts reachable in window",
+      "status": "ESTIMATE",
+      "value": 450,
+      "unit": "contacts",
+      "sources": [
+       "src_clutch"
+      ],
+      "needs": "owner sends ~35/day"
+     },
+     {
+      "name": "owner build hours per site",
+      "status": "ESTIMATE",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "card_hours"
+      ],
+      "needs": "first build timed"
+     },
+     {
+      "name": "deposit settlement by Zelle",
+      "status": "ASSUMED",
+      "value": 0,
+      "unit": "days",
+      "sources": [],
+      "needs": "buyer agrees to pay by Zelle; PayPal (held 7-21 days for new sellers) would miss the window"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "Clutch survey of 406 US small-business owners: 17% have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000 (vendor range, not measured payments)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "card_hours",
+      "url": "https://brain.local/card/cop_c77c549c5f3a4f7383ee#humanHours",
+      "dated": "2026-11-28",
+      "claim": "Owner fulfils, ~6 hours per site",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+      "dated": "2026-11-28",
+      "claim": "New-seller payments above a monthly amount are held up to 21 days",
+      "population": "PayPal sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx2",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages offered at ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457 with 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour, paid via PayPal",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_56436a0c43754342be51"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 local business pays a $250 deposit (50% of $500) by Zelle/PayPal from the first 150 owner-sent emails by day 5",
+     "stop": [
+      "No paid deposit from 150 contacts by day 5",
+      "Replies say $500 is too much and no deposit by day 6"
+     ],
+     "continue": [
+      "1+ paid deposit by day 5: email the remaining 300 contacts, close a second sale by day 9, build both and collect balances by day 12"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 150,
+      "reach": 450
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "why": "Hourly pay for the owner's own labour is a wage, not a price a buyer pays for an offer."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "deals": 2,
+      "price": 500,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": 24.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and capital are $0 (free Gmail, free-tier builder, owner fulfils), so any sale at a positive price contributes; the card records peakFundingCents 0."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_476e4a25f98c_452a28",
+    "digest": "476e4a25f98c5007179b81b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:05:14.158Z"
+   },
+   {
+    "goalId": "wst_fdff30da3834458fb7d2",
+    "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Owner emails local service businesses that have no website, offering a $500 3-page site he builds himself with a free AI builder, 50% deposit by Zelle; two sales carry the $1,000",
+     "opportunityIds": [
+      "cop_c77c549c5f3a4f7383ee"
+     ],
+     "why": "It is the only discovered route that needs no money in at all: free Gmail outreach, a free-tier builder, the owner as fulfiller, and Zelle/PayPal collection. 17% of US small businesses have no website (Clutch, Aug 2025) and agency guides price a small-business site at $100-$5,000, but nobody has shown these buyers paying $500 to a cold emailer or how many say yes. A zero-cost 5-day test (150 emails, a paid deposit as the only pass) measures exactly that before more than ~8 owner hours are spent."
+    },
+    "alternatives": [
+     {
+      "title": "Same offer, fulfilled by a Fiverr designer (~$150-$250)",
+      "why": "The designer must be paid before a new seller's PayPal funds clear (held 7-21 days), which breaks the no-money-in limit; only viable once a deposit has cleared."
+     },
+     {
+      "title": "Bid on Freelancer.com website requests",
+      "why": "6 free bids a month against 17-490 competing bids, budgets ~$140-$420 (INR 12,500-37,500); 3+ awards plus milestone release in 14 days is not credible."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Set aside: its revenue is a wage for the owner's labour, not a price a buyer pays for an offer."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner lists 450 local service businesses with no website on Google Maps and emails 150 of them from his own Gmail (days 0-3)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_clutch"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer: 3-page site live in 2 days, $500, 50% deposit by Zelle/PayPal",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: at least 1 paid $250 deposit from the first 150 contacts by day 5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Continue outreach to the remaining 300 contacts and close the second sale (days 5-9)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site on a free-tier AI builder (~6 hours each)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect the 50% balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 deposit (Zelle)",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 balance on delivery (Zelle)",
+      "settlesDay": 8,
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 deposit (Zelle)",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 balance on delivery (Zelle)",
+      "settlesDay": 12,
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "a buyer paying the deposit at $500"
+     },
+     {
+      "name": "close rate from owner cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 1 paid deposit from 150 contacts by day 5"
+     },
+     {
+      "name": "contacts reachable in window",
+      "status": "ESTIMATE",
+      "value": 450,
+      "unit": "contacts",
+      "sources": [
+       "src_clutch"
+      ],
+      "needs": "owner sends ~35/day"
+     },
+     {
+      "name": "owner build hours per site",
+      "status": "ESTIMATE",
+      "value": 6,
+      "unit": "hours",
+      "sources": [
+       "card_hours"
+      ],
+      "needs": "first build timed"
+     },
+     {
+      "name": "deposit settlement by Zelle",
+      "status": "ASSUMED",
+      "value": 0,
+      "unit": "days",
+      "sources": [],
+      "needs": "buyer agrees to pay by Zelle; PayPal (held 7-21 days for new sellers) would miss the window"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "Clutch survey of 406 US small-business owners: 17% have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000 (vendor range, not measured payments)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "card_hours",
+      "url": "https://brain.local/card/cop_c77c549c5f3a4f7383ee#humanHours",
+      "dated": "2026-11-28",
+      "claim": "Owner fulfils, ~6 hours per site",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+      "dated": "2026-11-28",
+      "claim": "New-seller payments above a monthly amount are held up to 21 days",
+      "population": "PayPal sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx2",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages offered at ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457 with 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour, paid via PayPal",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_56436a0c43754342be51"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 local business pays a $250 deposit (50% of $500) by Zelle/PayPal from the first 150 owner-sent emails by day 5",
+     "stop": [
+      "No paid deposit from 150 contacts by day 5",
+      "Replies say $500 is too much and no deposit by day 6"
+     ],
+     "continue": [
+      "1+ paid deposit by day 5: email the remaining 300 contacts, close a second sale by day 9, build both and collect balances by day 12"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 150,
+      "reach": 450
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "why": "Hourly pay for the owner's own labour is a wage, not a price a buyer pays for an offer."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "deals": 2,
+      "price": 500,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": 24.5
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "deals": 2,
+      "price": 500,
+      "directCost": 250,
+      "capital": null,
+      "settlesDay": null,
+      "ownerHours": 1
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "deals": 3,
+      "price": 350,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and capital are $0 (free Gmail, free-tier builder, owner fulfils), so any sale at a positive price contributes; the card records peakFundingCents 0."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_b920be6651d1_50ba68",
+    "digest": "b920be6651d1e236b6716c9b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:05:21.363Z"
+   },
+   {
+    "goalId": "wst_fdff30da3834458fb7d2",
+    "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+    "parentRevisionId": "rev_b920be6651d1_50ba68",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Owner emails local service businesses that have no website, offering a $500 3-page site he builds himself with a free AI builder, 50% deposit by Zelle; two sales carry the $1,000",
+     "opportunityIds": [
+      "cop_c77c549c5f3a4f7383ee"
+     ],
+     "why": "It is the only discovered route that needs no money in at all: free Gmail outreach, a free-tier builder, the owner as fulfiller, and Zelle/PayPal collection. 17% of US small businesses have no website (Clutch, Aug 2025) and agency guides price a small-business site at $100-$5,000, but nobody has shown these buyers paying $500 to a cold emailer or how many say yes. A zero-cost 5-day test (150 emails, a paid deposit as the only pass) measures exactly that before more than ~8 owner hours are spent."
+    },
+    "alternatives": [
+     {
+      "title": "Same offer, fulfilled by a Fiverr designer (~$150-$250)",
+      "why": "The designer must be paid before a new seller's PayPal funds clear (held 7-21 days), which breaks the no-money-in limit; only viable once a deposit has cleared."
+     },
+     {
+      "title": "Bid on Freelancer.com website requests",
+      "why": "6 free bids a month against 17-490 competing bids, budgets ~$140-$420 (INR 12,500-37,500); 3+ awards plus milestone release in 14 days is not credible."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Rejected on its own record: acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance; Brain's check also refuses hourly pay as a sale price, so it cannot be a member leg."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any outreach: owner builds and times one sample 3-page local-business site on a free-tier AI builder and publishes it as the portfolio link (day 0, $0); pass = live site in <= 6 hours",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner lists 450 local service businesses with no website on Google Maps and emails 150 of them from his own Gmail (days 1-4), linking the sample site",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_clutch"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer: 3-page site live in 2 days, $500, 50% deposit by Zelle (instant rail only)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: >= 1 Zelle deposit of $250 received from the first 150 contacts by day 5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "DELIVER",
+      "label": "Build and publish sale 1's site (days 5-7)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6a",
+      "kind": "COLLECT",
+      "label": "Collect sale 1's $250 balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.25,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Email the remaining 300 contacts (days 5-9) and close sale 2; checkpoint: 2 paid deposits by day 9",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "DELIVER",
+      "label": "Build and publish sale 2's site (days 9-11)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6b",
+      "kind": "COLLECT",
+      "label": "Collect sale 2's $250 balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s5b",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.25,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 deposit (Zelle)",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 balance on delivery (Zelle)",
+      "settlesDay": 7,
+      "stepId": "s6a"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 deposit (Zelle)",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 balance on delivery (Zelle)",
+      "settlesDay": 11,
+      "stepId": "s6b"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "a buyer paying the deposit at $500"
+     },
+     {
+      "name": "close rate from owner cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 1 paid deposit from 150 contacts by day 5"
+     },
+     {
+      "name": "contacts reachable in window",
+      "status": "ESTIMATE",
+      "value": 450,
+      "unit": "contacts",
+      "sources": [
+       "src_clutch"
+      ],
+      "needs": "owner sends ~35/day"
+     },
+     {
+      "name": "owner build hours per site",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [
+       "card_hours"
+      ],
+      "needs": "sample site timed on day 0 before any offer (pass <= 6 h)"
+     },
+     {
+      "name": "deposit settlement by Zelle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days",
+      "sources": [],
+      "needs": "each deposit received by Zelle (instant); a buyer who will only pay by PayPal is not counted"
+     },
+     {
+      "name": "owner hours over the 14 days",
+      "status": "ASSUMED",
+      "value": 30.5,
+      "unit": "hours",
+      "sources": [],
+      "needs": "owner input: the objective states no weekly allowance; owner confirms ~15 h/week before day 0"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "Clutch survey of 406 US small-business owners: 17% have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000 (vendor range, not measured payments)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "card_hours",
+      "url": "https://brain.local/card/cop_c77c549c5f3a4f7383ee#humanHours",
+      "dated": "2026-11-28",
+      "claim": "Owner fulfils, ~6 hours per site",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+      "dated": "2026-11-28",
+      "claim": "New-seller payments above a monthly amount are held up to 21 days",
+      "population": "PayPal sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx2",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages offered at ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457 with 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour, paid via PayPal",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_56436a0c43754342be51"
+     }
+    ],
+    "validation": {
+     "proof": "Day 0: a sample 3-page site built and published by the owner in <= 6 hours on a free builder; by day 5: >= 1 Zelle deposit of $250 received (cash in hand) from the first 150 contacts",
+     "stop": [
+      "Sample site not live within 6 owner hours on day 0 (no outreach is sent)",
+      "No Zelle deposit received from 150 contacts by day 5",
+      "Buyers will pay only by PayPal/card (new-seller holds of up to 21 days would miss the window)",
+      "Fewer than 2 paid deposits by day 9"
+     ],
+     "continue": [
+      "Sample built and 1+ Zelle deposit by day 5: deliver sale 1 by day 7, email the remaining 300 contacts, and with a 2nd Zelle deposit by day 9 deliver and collect by day 11"
+     ],
+     "decides": [
+      "FULFILMENT",
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "SETTLES_IN_TIME"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 150,
+      "reach": 450
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Test ordering: deposits before evidence the owner can build",
+      "resolution": "Accepted. Step s0 builds and times a sample site on day 0 before any outreach; it is part of the proof and FULFILMENT is in validation.decides."
+     },
+     {
+      "finding": "Ledger vs steps: sale 1 balance day 8 but DELIVER day 11",
+      "resolution": "Accepted. Delivery split per sale: sale 1 delivered and collected day 7 (s5a/s6a), sale 2 day 11 (s5b/s6b); receipts linked to those steps."
+     },
+     {
+      "finding": "Zelle settlement assumed; SETTLES_IN_TIME belongs in decides",
+      "resolution": "Accepted. Settlement is now UNKNOWN, the proof counts only Zelle receipts, a PayPal-only buyer is a stop, and SETTLES_IN_TIME is in validation.decides."
+     },
+     {
+      "finding": "Owner hours ~24.5 unstated",
+      "resolution": "Accepted. Stated as an owner input: ~30.5 hours over 14 days (including the sample build), ASSUMED, to be confirmed by the owner before day 0."
+     },
+     {
+      "finding": "Second sale near the threshold edge",
+      "resolution": "Accepted. Explicit checkpoint added: fewer than 2 paid deposits by day 9 is a stop."
+     },
+     {
+      "finding": "Fiverr-fulfilled variant correctly set aside",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "DataAnnotation set aside as a wage is not a valid reason",
+      "resolution": "Partly accepted: it is now judged on its own record (assessment acceptance not guaranteed, timing unknown, work availability not guaranteed per its FAQ) and rejected on those grounds. It is not added as a parallel member because Brain's check refuses it (WAGE_AS_PRICE: hourly pay for the owner's work is not a sale price)."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "humanHours",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "why": "Acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance, so the 20-40 paid hours cannot be planned on; Brain's check also refuses hourly pay for the owner's labour as a sale price (WAGE_AS_PRICE)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "deals": 2,
+      "price": 500,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 11,
+      "ownerHours": 30.5
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "deals": 2,
+      "price": 500,
+      "directCost": 250,
+      "capital": null,
+      "settlesDay": null,
+      "ownerHours": 1
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "deals": 3,
+      "price": 350,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and capital are $0 (free Gmail, free-tier builder, owner fulfils), so any sale at a positive price contributes; the card records peakFundingCents 0."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_ac013dc110df_57d257",
+    "digest": "ac013dc110df12a40a4deed8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:13:15.279Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_fdff30da3834458fb7d2",
+   "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+   "parentRevisionId": "rev_b920be6651d1_50ba68",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Owner emails local service businesses that have no website, offering a $500 3-page site he builds himself with a free AI builder, 50% deposit by Zelle; two sales carry the $1,000",
+    "opportunityIds": [
+     "cop_c77c549c5f3a4f7383ee"
+    ],
+    "why": "It is the only discovered route that needs no money in at all: free Gmail outreach, a free-tier builder, the owner as fulfiller, and Zelle/PayPal collection. 17% of US small businesses have no website (Clutch, Aug 2025) and agency guides price a small-business site at $100-$5,000, but nobody has shown these buyers paying $500 to a cold emailer or how many say yes. A zero-cost 5-day test (150 emails, a paid deposit as the only pass) measures exactly that before more than ~8 owner hours are spent."
+   },
+   "alternatives": [
+    {
+     "title": "Same offer, fulfilled by a Fiverr designer (~$150-$250)",
+     "why": "The designer must be paid before a new seller's PayPal funds clear (held 7-21 days), which breaks the no-money-in limit; only viable once a deposit has cleared."
+    },
+    {
+     "title": "Bid on Freelancer.com website requests",
+     "why": "6 free bids a month against 17-490 competing bids, budgets ~$140-$420 (INR 12,500-37,500); 3+ awards plus milestone release in 14 days is not credible."
+    },
+    {
+     "title": "Hourly AI-training work on DataAnnotation",
+     "why": "Rejected on its own record: acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance; Brain's check also refuses hourly pay as a sale price, so it cannot be a member leg."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "TEST",
+     "label": "Before any outreach: owner builds and times one sample 3-page local-business site on a free-tier AI builder and publishes it as the portfolio link (day 0, $0); pass = live site in <= 6 hours",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "card_hours"
+     ],
+     "ownerHours": 6,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Owner lists 450 local service businesses with no website on Google Maps and emails 150 of them from his own Gmail (days 1-4), linking the sample site",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s0",
+     "evidence": [
+      "src_clutch"
+     ],
+     "ownerHours": 6,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "OFFER",
+     "label": "Offer: 3-page site live in 2 days, $500, 50% deposit by Zelle (instant rail only)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_webfx"
+     ],
+     "ownerHours": 1,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "TEST",
+     "label": "Validation: >= 1 Zelle deposit of $250 received from the first 150 contacts by day 5",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5a",
+     "kind": "DELIVER",
+     "label": "Build and publish sale 1's site (days 5-7)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s3",
+     "evidence": [
+      "card_hours"
+     ],
+     "ownerHours": 6,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6a",
+     "kind": "COLLECT",
+     "label": "Collect sale 1's $250 balance by Zelle on delivery",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s5a",
+     "evidence": [
+      "src_paypal"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "SELL",
+     "label": "Email the remaining 300 contacts (days 5-9) and close sale 2; checkpoint: 2 paid deposits by day 9",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 9,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 4,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5b",
+     "kind": "DELIVER",
+     "label": "Build and publish sale 2's site (days 9-11)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 11,
+     "dependsOn": "s4",
+     "evidence": [
+      "card_hours"
+     ],
+     "ownerHours": 6,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6b",
+     "kind": "COLLECT",
+     "label": "Collect sale 2's $250 balance by Zelle on delivery",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 11,
+     "dependsOn": "s5b",
+     "evidence": [
+      "src_paypal"
+     ],
+     "ownerHours": 0.25,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Sale 1 deposit (Zelle)",
+     "settlesDay": 5,
+     "stepId": "s3"
+    },
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Sale 1 balance on delivery (Zelle)",
+     "settlesDay": 7,
+     "stepId": "s6a"
+    },
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Sale 2 deposit (Zelle)",
+     "settlesDay": 9,
+     "stepId": "s4"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Sale 2 balance on delivery (Zelle)",
+     "settlesDay": 11,
+     "stepId": "s6b"
+    }
+   ],
+   "proofDay": 5,
+   "quantities": [
+    {
+     "name": "price per site",
+     "status": "ASSUMED",
+     "value": 500,
+     "unit": "USD",
+     "sources": [
+      "src_webfx"
+     ],
+     "needs": "a buyer paying the deposit at $500"
+    },
+    {
+     "name": "close rate from owner cold email",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid sales per contact",
+     "sources": [],
+     "needs": ">= 1 paid deposit from 150 contacts by day 5"
+    },
+    {
+     "name": "contacts reachable in window",
+     "status": "ESTIMATE",
+     "value": 450,
+     "unit": "contacts",
+     "sources": [
+      "src_clutch"
+     ],
+     "needs": "owner sends ~35/day"
+    },
+    {
+     "name": "owner build hours per site",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours",
+     "sources": [
+      "card_hours"
+     ],
+     "needs": "sample site timed on day 0 before any offer (pass <= 6 h)"
+    },
+    {
+     "name": "deposit settlement by Zelle",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "days",
+     "sources": [],
+     "needs": "each deposit received by Zelle (instant); a buyer who will only pay by PayPal is not counted"
+    },
+    {
+     "name": "owner hours over the 14 days",
+     "status": "ASSUMED",
+     "value": 30.5,
+     "unit": "hours",
+     "sources": [],
+     "needs": "owner input: the objective states no weekly allowance; owner confirms ~15 h/week before day 0"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_clutch",
+     "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+     "dated": "2025-08-21",
+     "claim": "Clutch survey of 406 US small-business owners: 17% have no website",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c77c549c5f3a4f7383ee"
+    },
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+     "dated": "2026-05-15",
+     "claim": "Agency price table: small business website $100 to $5,000 (vendor range, not measured payments)",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c77c549c5f3a4f7383ee"
+    },
+    {
+     "id": "card_hours",
+     "url": "https://brain.local/card/cop_c77c549c5f3a4f7383ee#humanHours",
+     "dated": "2026-11-28",
+     "claim": "Owner fulfils, ~6 hours per site",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c77c549c5f3a4f7383ee"
+    },
+    {
+     "id": "src_paypal",
+     "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+     "dated": "2026-11-28",
+     "claim": "New-seller payments above a monthly amount are held up to 21 days",
+     "population": "PayPal sellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c77c549c5f3a4f7383ee"
+    },
+    {
+     "id": "src_webfx2",
+     "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+     "dated": "2026-05-15",
+     "claim": "Small business website $100 to $5,000",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e9bb1449d06b4f379ef8"
+    },
+    {
+     "id": "src_fiverr",
+     "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+     "dated": "2026-11-28",
+     "claim": "Fiverr WordPress business-site packages offered at ~$100-$500",
+     "population": "Fiverr web designers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_e9bb1449d06b4f379ef8"
+    },
+    {
+     "id": "src_fl",
+     "url": "https://www.freelancer.com/jobs/website-design/",
+     "dated": "2026-11-27",
+     "claim": "355 open website-design requests; business-site average bids $214-$457 with 100-490 bids each",
+     "population": "Freelancer.com clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2d044510d3494b649398"
+    },
+    {
+     "id": "src_fl2",
+     "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+     "dated": "2026-11-28",
+     "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+     "population": "Freelancer.com clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2d044510d3494b649398"
+    },
+    {
+     "id": "src_da",
+     "url": "https://www.dataannotation.tech/faq",
+     "dated": "2026",
+     "claim": "General projects start at $25-$50 per hour, paid via PayPal",
+     "population": "DataAnnotation workers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_56436a0c43754342be51"
+    }
+   ],
+   "validation": {
+    "proof": "Day 0: a sample 3-page site built and published by the owner in <= 6 hours on a free builder; by day 5: >= 1 Zelle deposit of $250 received (cash in hand) from the first 150 contacts",
+    "stop": [
+     "Sample site not live within 6 owner hours on day 0 (no outreach is sent)",
+     "No Zelle deposit received from 150 contacts by day 5",
+     "Buyers will pay only by PayPal/card (new-seller holds of up to 21 days would miss the window)",
+     "Fewer than 2 paid deposits by day 9"
+    ],
+    "continue": [
+     "Sample built and 1+ Zelle deposit by day 5: deliver sale 1 by day 7, email the remaining 300 contacts, and with a 2nd Zelle deposit by day 9 deliver and collect by day 11"
+    ],
+    "decides": [
+     "FULFILMENT",
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "CURRENT_DEMAND",
+     "SETTLES_IN_TIME"
+    ],
+    "threshold": {
+     "paid": 1,
+     "of": 150,
+     "reach": 450
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Test ordering: deposits before evidence the owner can build",
+     "resolution": "Accepted. Step s0 builds and times a sample site on day 0 before any outreach; it is part of the proof and FULFILMENT is in validation.decides."
+    },
+    {
+     "finding": "Ledger vs steps: sale 1 balance day 8 but DELIVER day 11",
+     "resolution": "Accepted. Delivery split per sale: sale 1 delivered and collected day 7 (s5a/s6a), sale 2 day 11 (s5b/s6b); receipts linked to those steps."
+    },
+    {
+     "finding": "Zelle settlement assumed; SETTLES_IN_TIME belongs in decides",
+     "resolution": "Accepted. Settlement is now UNKNOWN, the proof counts only Zelle receipts, a PayPal-only buyer is a stop, and SETTLES_IN_TIME is in validation.decides."
+    },
+    {
+     "finding": "Owner hours ~24.5 unstated",
+     "resolution": "Accepted. Stated as an owner input: ~30.5 hours over 14 days (including the sample build), ASSUMED, to be confirmed by the owner before day 0."
+    },
+    {
+     "finding": "Second sale near the threshold edge",
+     "resolution": "Accepted. Explicit checkpoint added: fewer than 2 paid deposits by day 9 is a stop."
+    },
+    {
+     "finding": "Fiverr-fulfilled variant correctly set aside",
+     "resolution": "Agreed; unchanged."
+    },
+    {
+     "finding": "DataAnnotation set aside as a wage is not a valid reason",
+     "resolution": "Partly accepted: it is now judged on its own record (assessment acceptance not guaranteed, timing unknown, work availability not guaranteed per its FAQ) and rejected on those grounds. It is not added as a parallel member because Brain's check refuses it (WAGE_AS_PRICE: hourly pay for the owner's work is not a sale price)."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "humanHours",
+      "brain:FULFILMENT"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "timeToFirstCash",
+      "brain:SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_c77c549c5f3a4f7383ee",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_e9bb1449d06b4f379ef8",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_2d044510d3494b649398",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME",
+      "MARKET_VOLUME"
+     ]
+    },
+    {
+     "opportunityId": "cop_56436a0c43754342be51",
+     "missing": [
+      "CURRENT_DEMAND",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_56436a0c43754342be51",
+     "why": "Acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance, so the 20-40 paid hours cannot be planned on; Brain's check also refuses hourly pay for the owner's labour as a sale price (WAGE_AS_PRICE)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_c77c549c5f3a4f7383ee",
+     "deals": 2,
+     "price": 500,
+     "directCost": 0,
+     "capital": 0,
+     "settlesDay": 11,
+     "ownerHours": 30.5
+    },
+    {
+     "opportunityId": "cop_e9bb1449d06b4f379ef8",
+     "deals": 2,
+     "price": 500,
+     "directCost": 250,
+     "capital": null,
+     "settlesDay": null,
+     "ownerHours": 1
+    },
+    {
+     "opportunityId": "cop_2d044510d3494b649398",
+     "deals": 3,
+     "price": 350,
+     "directCost": 0,
+     "capital": 0,
+     "settlesDay": null,
+     "ownerHours": 18
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_c77c549c5f3a4f7383ee",
+     "link": "ECONOMICS",
+     "reason": "Direct cost and capital are $0 (free Gmail, free-tier builder, owner fulfils), so any sale at a positive price contributes; the card records peakFundingCents 0."
+    },
+    {
+     "opportunityId": "cop_56436a0c43754342be51",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+    },
+    {
+     "opportunityId": "cop_56436a0c43754342be51",
+     "link": "ECONOMICS",
+     "reason": "$0 cost and $0 capital against a published hourly rate."
+    }
+   ],
+   "revisionId": "rev_ac013dc110df_57d257",
+   "digest": "ac013dc110df12a40a4deed8",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_92ac03e79b14402e9048/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:13:15.279Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_ac013dc110df_57d257",
+   "digest": "ac013dc110df12a40a4deed8",
+   "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 25000,
+    "minCashDay": 5,
+    "collectedCents": 100000,
+    "collectedInWindowCents": 100000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 100000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: AI-training evaluation work on DataAnnotation, paid hourly v\", and what it is missing first is an offer and a price. Research first: the deep dive on \"AI-training evaluation work on DataAnnotation, paid hourly v\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 700× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Owner-sent emails offering a [figure withheld] website to local businesse\" needs [figure withheld] and keeps [figure withheld], 250× the [figure withheld] behind the plan (bound ×20), on a ), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_2d044510d3494b649398",
+     "cop_c77c549c5f3a4f7383ee",
+     "cop_e9bb1449d06b4f379ef8",
+     "cop_56436a0c43754342be51"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dive on \"AI-training evaluation work on DataAnnotation, paid hourly v\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "title": "Owner-sent emails offering a $500 website to local businesses without a site, owner builds it with an AI site builder",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 500,
+      "card": {
+       "payer": "US local service business owner (no website or outdated site)",
+       "reachableChannel": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+       "offerScope": "Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 6,
+       "requiredCapabilities": [],
+       "industry": "Local services / web design",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner's own Gmail, manually sent to businesses found on Google Maps with no webs"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal to US local service business owner (no website or outdated site), reached through Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free), at $500; Owner, using a free-tier AI website builder delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner, using a free-tier AI website builder.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "6 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Done-for-you 3-page site for a local service business, built by the owner with an AI builder in 2 days, 50% up front, paid by Zelle or PayPal",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service business owner (no website or outdated site)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/jobs/website-design/; https://www.webfx.com/web-design/pricing/website-costs; https://www.paypal.com/us/cshelp/article/PCC112; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/cold-email-benchmark-report-2026; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "title": "Owner-sent emails offering a $500 website to local businesses without a site",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 500,
+      "card": {
+       "payer": "US local service business owner (no website or outdated site)",
+       "reachableChannel": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+       "offerScope": "Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "Local services / web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner's own Gmail, manually sent to businesses found on Google Maps with no webs"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 250, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice to US local service business owner (no website or outdated site), reached through Owner's own Gmail, manually sent to businesses found on Google Maps with no website (free), at $500; Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr WordPress web designer (Standard package ~$150-$250, 4-5 day delivery).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Done-for-you 3-page site on a free-tier builder, built by Brain, paid by PayPal invoice",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service business owner (no website or outdated site)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/jobs/website-design/; https://www.webfx.com/web-design/pricing/website-costs; https://www.paypal.com/us/cshelp/article/PCC112; https://fiverr.com/farzanakhan_01/website-or-landing-page; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/cold-email-benchmark-report-2026; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "title": "Bid on posted website-build requests on Freelancer.com (owner builds with AI site builders)",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "B_EVIDENCED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Clients posting website-design projects on Freelancer.com",
+       "reachableChannel": "Freelancer.com bids",
+       "offerScope": "Build the requested business website / redesign with AI-assisted development",
+       "priceCents": 35000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 6,
+       "requiredCapabilities": [],
+       "industry": "Web development marketplace",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Freelancer.com bids"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Freelancer.com bids",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "355 Clients posting website-design projects on Freelancer.com (355 open Website Design jobs listed on Freelancer.com 2026-11-27, average bids 2-,415, typical business site 14-57, 100-490 bids each)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Build the requested business website / redesign with AI-assisted development to Clients posting website-design projects on Freelancer.com, reached through Freelancer.com bids, at $350; Owner, using a free-tier AI website builder delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner, using a free-tier AI website builder.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "6 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Build the requested business website / redesign with AI-assisted development",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Clients posting website-design projects on Freelancer.com",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$350",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$350",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/jobs/website-design/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "title": "AI-training evaluation work on DataAnnotation, paid hourly via PayPal",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1000,
+      "card": {
+       "payer": "DataAnnotation (AI training data company)",
+       "reachableChannel": "DataAnnotation worker application and Starter Assessment",
+       "offerScope": "Hourly evaluation of chatbot responses / code by the owner",
+       "priceCents": 2500,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "AI data annotation",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: DataAnnotation worker application and Starter Assessment"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 25 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "160 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "40 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "DataAnnotation worker application and Starter Assessment",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1 DataAnnotation (AI training data company) (One payer; per-hour 'sale'; work availability not guaranteed per FAQ)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Hourly evaluation of chatbot responses / code by the owner to DataAnnotation (AI training data company), reached through DataAnnotation worker application and Starter Assessment, at $25; Owner delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Hourly evaluation of chatbot responses / code by the owner",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "DataAnnotation (AI training data company)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$25",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "DataAnnotation publishes its pay for general AI-training projects as starting at $25-$50 per hour, paid via PayPal, with deposits delivered within a few days of a payout request; work availability is not guaranteed.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 100000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T06:07:11.587Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b920be6651d1_50ba68",
+    "revisionDigest": "b920be6651d1e236b6716c9b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_29477c3cc2c84716a6b7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right shape (no buyer price, close rate or demand is evidenced; a $0 live test measures them) and the arithmetic reaches the target: 2 x $500 = $1,000 collected, $0 spent, $0 exposure; at the pass threshold 1 paid of 150 (0.67%) the 450 reachable contacts project ~3 sales, enough for 2. But two things stop me letting the owner act on it. (1) The test takes buyers' $250 deposits before fulfilment is shown possible: the only fulfilment fact is a RECOMMENDATION ('Owner, using a free-tier AI website builder', ~6 hours), FULFILMENT is missing in the chain and is not in validation.decides, and 'first build timed' is listed as the way to measure it but is scheduled after the deposits. The owner should build and time one sample 3-page site on the free builder (day 0-1, $0) before the first offer goes out, and that should be part of the proof. (2) The DataAnnotation opening is set aside as 'a wage, not a price a buyer pays', which is not a valid reason: DataAnnotation is a payer paying a published, verified rate ($25-$50/h, PayPal, deposits within a few days of request) for delivered work, and $1,000 needs only 20-40 hours, no money in. It must be judged on its own record - acceptance through the Starter Assessment and work availability are not guaranteed, and the time to acceptance is unknown - and either combined as a parallel $0 leg with its own proof/stop, or rejected on those grounds.",
+    "findings": [
+     "Test ordering: deposits (orders) on day <=5 come before any evidence the owner can build the site; move a timed sample build ahead of outreach.",
+     "Ledger vs steps: sale 1 balance is received day 8 but the DELIVER step is day 11; make them agree (deliver sale 1 by ~day 7).",
+     "Zelle settlement '0 days' is ASSUMED; if a buyer insists on PayPal the plan itself notes new-seller holds of up to 21 days, which would miss the 14-day window. The proof should require Zelle (or another instant rail) receipts, and SETTLES_IN_TIME belongs in validation.decides.",
+     "Owner hours ~24.5 in 14 days (outreach plus 2 x 6h builds) against an unstated weekly allowance: unknown, not zero - state it as an owner input.",
+     "Second sale by day 9 at ~35 contacts/day leaves only ~150 further contacts after day 5; at the 0.67% threshold that is ~1 expected sale, so the target is reached only around the threshold edge; consider a stop/continue that checks 2 paid deposits by day 9 explicitly.",
+     "Fiverr-fulfilled variant correctly set aside under the no-money-in limit until a deposit has cleared."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:08:43.566Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's only fulfilment fact is a RECOMMENDATION that the owner builds it with a free AI builder in ~6 hours; no EVIDENCE shows the owner can, and the test takes paid deposits before this is shown."
+     },
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "SETTLES_IN_TIME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "timeToFirstCash",
+      "why": "Same-day Zelle settlement is an assumption; no EVIDENCE fact records how these buyers pay or when it clears, and the PayPal alternative can hold funds past the 14-day window."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_ac013dc110df_57d257",
+    "revisionDigest": "ac013dc110df12a40a4deed8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_29477c3cc2c84716a6b7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and now startable without breaking a limit. Fulfilment is shown possible before any order: a timed sample site on day 0 is part of the proof and stops all outreach if it fails; FULFILMENT and SETTLES_IN_TIME join CONVERSION, OFFER_AND_PRICE and CURRENT_DEMAND in validation.decides, and price, close rate, build hours and settlement are all carried as UNKNOWN/ASSUMED, not as known. Recomputed: 2 x $500 = $1,000 collected (4 Zelle receipts of $250, days 5, 7, 9, 11), $0 spent, $0 capital, minCash $250, inside the 14-day window with 3 days slack. Steps and ledger now agree (sale 1 delivered/collected day 7, sale 2 day 11). Pass at threshold (1 of 150 by day 5) plus the explicit 2-deposits-by-day-9 checkpoint means the plan either reaches $1,000 or stops by day 9; PayPal-only buyers are a stop because new-seller holds would miss the window. Owner hours (~30.5 h) are stated as an owner input to confirm before day 0, not assumed zero. DataAnnotation is now rejected on its own record (assessment acceptance and timing not guaranteed, work availability depends on demand).",
+    "findings": [
+     "Arithmetic: 4 x $250 = $1,000 by day 11 <= 14; ledger matches steps; trace ownerFunded $0, exposure $0.",
+     "Threshold edge: 1 paid of 150 projects to 3 of 450, but only ~150 more contacts are sent between days 5 and 9 at ~35/day, so the day-9 checkpoint (2 deposits) is the binding test - correctly made a stop.",
+     "Owner hours 30.5 over 14 days is ASSUMED pending the owner's confirmation; if the owner has less, the plan must stop before day 0.",
+     "Zelle-only collection may itself reduce conversion; the measured rate from the test is what decides it, which is correct."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:14:28.227Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_ac013dc110df_57d257",
+   "digest": "ac013dc110df12a40a4deed8",
+   "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+   "plan": {
+    "goalId": "wst_fdff30da3834458fb7d2",
+    "contractDigest": "ccd96a9e3d5569ba1aa7d02b",
+    "parentRevisionId": "rev_b920be6651d1_50ba68",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Owner emails local service businesses that have no website, offering a $500 3-page site he builds himself with a free AI builder, 50% deposit by Zelle; two sales carry the $1,000",
+     "opportunityIds": [
+      "cop_c77c549c5f3a4f7383ee"
+     ],
+     "why": "It is the only discovered route that needs no money in at all: free Gmail outreach, a free-tier builder, the owner as fulfiller, and Zelle/PayPal collection. 17% of US small businesses have no website (Clutch, Aug 2025) and agency guides price a small-business site at $100-$5,000, but nobody has shown these buyers paying $500 to a cold emailer or how many say yes. A zero-cost 5-day test (150 emails, a paid deposit as the only pass) measures exactly that before more than ~8 owner hours are spent."
+    },
+    "alternatives": [
+     {
+      "title": "Same offer, fulfilled by a Fiverr designer (~$150-$250)",
+      "why": "The designer must be paid before a new seller's PayPal funds clear (held 7-21 days), which breaks the no-money-in limit; only viable once a deposit has cleared."
+     },
+     {
+      "title": "Bid on Freelancer.com website requests",
+      "why": "6 free bids a month against 17-490 competing bids, budgets ~$140-$420 (INR 12,500-37,500); 3+ awards plus milestone release in 14 days is not credible."
+     },
+     {
+      "title": "Hourly AI-training work on DataAnnotation",
+      "why": "Rejected on its own record: acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance; Brain's check also refuses hourly pay as a sale price, so it cannot be a member leg."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any outreach: owner builds and times one sample 3-page local-business site on a free-tier AI builder and publishes it as the portfolio link (day 0, $0); pass = live site in <= 6 hours",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner lists 450 local service businesses with no website on Google Maps and emails 150 of them from his own Gmail (days 1-4), linking the sample site",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_clutch"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer: 3-page site live in 2 days, $500, 50% deposit by Zelle (instant rail only)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: >= 1 Zelle deposit of $250 received from the first 150 contacts by day 5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "DELIVER",
+      "label": "Build and publish sale 1's site (days 5-7)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6a",
+      "kind": "COLLECT",
+      "label": "Collect sale 1's $250 balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.25,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Email the remaining 300 contacts (days 5-9) and close sale 2; checkpoint: 2 paid deposits by day 9",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "DELIVER",
+      "label": "Build and publish sale 2's site (days 9-11)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "card_hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6b",
+      "kind": "COLLECT",
+      "label": "Collect sale 2's $250 balance by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s5b",
+      "evidence": [
+       "src_paypal"
+      ],
+      "ownerHours": 0.25,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 deposit (Zelle)",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 1 balance on delivery (Zelle)",
+      "settlesDay": 7,
+      "stepId": "s6a"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 deposit (Zelle)",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Sale 2 balance on delivery (Zelle)",
+      "settlesDay": 11,
+      "stepId": "s6b"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_webfx"
+      ],
+      "needs": "a buyer paying the deposit at $500"
+     },
+     {
+      "name": "close rate from owner cold email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid sales per contact",
+      "sources": [],
+      "needs": ">= 1 paid deposit from 150 contacts by day 5"
+     },
+     {
+      "name": "contacts reachable in window",
+      "status": "ESTIMATE",
+      "value": 450,
+      "unit": "contacts",
+      "sources": [
+       "src_clutch"
+      ],
+      "needs": "owner sends ~35/day"
+     },
+     {
+      "name": "owner build hours per site",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [
+       "card_hours"
+      ],
+      "needs": "sample site timed on day 0 before any offer (pass <= 6 h)"
+     },
+     {
+      "name": "deposit settlement by Zelle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days",
+      "sources": [],
+      "needs": "each deposit received by Zelle (instant); a buyer who will only pay by PayPal is not counted"
+     },
+     {
+      "name": "owner hours over the 14 days",
+      "status": "ASSUMED",
+      "value": 30.5,
+      "unit": "hours",
+      "sources": [],
+      "needs": "owner input: the objective states no weekly allowance; owner confirms ~15 h/week before day 0"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_clutch",
+      "url": "https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline",
+      "dated": "2025-08-21",
+      "claim": "Clutch survey of 406 US small-business owners: 17% have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Agency price table: small business website $100 to $5,000 (vendor range, not measured payments)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "card_hours",
+      "url": "https://brain.local/card/cop_c77c549c5f3a4f7383ee#humanHours",
+      "dated": "2026-11-28",
+      "claim": "Owner fulfils, ~6 hours per site",
+      "population": "this opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/PCC112",
+      "dated": "2026-11-28",
+      "claim": "New-seller payments above a monthly amount are held up to 21 days",
+      "population": "PayPal sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c77c549c5f3a4f7383ee"
+     },
+     {
+      "id": "src_webfx2",
+      "url": "https://www.webfx.com/web-design/pricing/website-costs/",
+      "dated": "2026-05-15",
+      "claim": "Small business website $100 to $5,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fiverr",
+      "url": "https://fiverr.com/farzanakhan_01/website-or-landing-page",
+      "dated": "2026-11-28",
+      "claim": "Fiverr WordPress business-site packages offered at ~$100-$500",
+      "population": "Fiverr web designers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e9bb1449d06b4f379ef8"
+     },
+     {
+      "id": "src_fl",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-27",
+      "claim": "355 open website-design requests; business-site average bids $214-$457 with 100-490 bids each",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_fl2",
+      "url": "https://www.freelancer.com/projects/cms/build-professional-business-website",
+      "dated": "2026-11-28",
+      "claim": "Business website request, budget INR 12,500-37,500, 22 proposals",
+      "population": "Freelancer.com clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_2d044510d3494b649398"
+     },
+     {
+      "id": "src_da",
+      "url": "https://www.dataannotation.tech/faq",
+      "dated": "2026",
+      "claim": "General projects start at $25-$50 per hour, paid via PayPal",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_56436a0c43754342be51"
+     }
+    ],
+    "validation": {
+     "proof": "Day 0: a sample 3-page site built and published by the owner in <= 6 hours on a free builder; by day 5: >= 1 Zelle deposit of $250 received (cash in hand) from the first 150 contacts",
+     "stop": [
+      "Sample site not live within 6 owner hours on day 0 (no outreach is sent)",
+      "No Zelle deposit received from 150 contacts by day 5",
+      "Buyers will pay only by PayPal/card (new-seller holds of up to 21 days would miss the window)",
+      "Fewer than 2 paid deposits by day 9"
+     ],
+     "continue": [
+      "Sample built and 1+ Zelle deposit by day 5: deliver sale 1 by day 7, email the remaining 300 contacts, and with a 2nd Zelle deposit by day 9 deliver and collect by day 11"
+     ],
+     "decides": [
+      "FULFILMENT",
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "SETTLES_IN_TIME"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 150,
+      "reach": 450
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Test ordering: deposits before evidence the owner can build",
+      "resolution": "Accepted. Step s0 builds and times a sample site on day 0 before any outreach; it is part of the proof and FULFILMENT is in validation.decides."
+     },
+     {
+      "finding": "Ledger vs steps: sale 1 balance day 8 but DELIVER day 11",
+      "resolution": "Accepted. Delivery split per sale: sale 1 delivered and collected day 7 (s5a/s6a), sale 2 day 11 (s5b/s6b); receipts linked to those steps."
+     },
+     {
+      "finding": "Zelle settlement assumed; SETTLES_IN_TIME belongs in decides",
+      "resolution": "Accepted. Settlement is now UNKNOWN, the proof counts only Zelle receipts, a PayPal-only buyer is a stop, and SETTLES_IN_TIME is in validation.decides."
+     },
+     {
+      "finding": "Owner hours ~24.5 unstated",
+      "resolution": "Accepted. Stated as an owner input: ~30.5 hours over 14 days (including the sample build), ASSUMED, to be confirmed by the owner before day 0."
+     },
+     {
+      "finding": "Second sale near the threshold edge",
+      "resolution": "Accepted. Explicit checkpoint added: fewer than 2 paid deposits by day 9 is a stop."
+     },
+     {
+      "finding": "Fiverr-fulfilled variant correctly set aside",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "DataAnnotation set aside as a wage is not a valid reason",
+      "resolution": "Partly accepted: it is now judged on its own record (assessment acceptance not guaranteed, timing unknown, work availability not guaranteed per its FAQ) and rejected on those grounds. It is not added as a parallel member because Brain's check refuses it (WAGE_AS_PRICE: hourly pay for the owner's work is not a sale price)."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "humanHours",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "why": "Acceptance through the Starter Assessment is not guaranteed and its timing is unknown, and the payer's FAQ says work availability depends on demand and performance, so the 20-40 paid hours cannot be planned on; Brain's check also refuses hourly pay for the owner's labour as a sale price (WAGE_AS_PRICE)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "deals": 2,
+      "price": 500,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 11,
+      "ownerHours": 30.5
+     },
+     {
+      "opportunityId": "cop_e9bb1449d06b4f379ef8",
+      "deals": 2,
+      "price": 500,
+      "directCost": 250,
+      "capital": null,
+      "settlesDay": null,
+      "ownerHours": 1
+     },
+     {
+      "opportunityId": "cop_2d044510d3494b649398",
+      "deals": 3,
+      "price": 350,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_c77c549c5f3a4f7383ee",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and capital are $0 (free Gmail, free-tier builder, owner fulfils), so any sale at a positive price contributes; the card records peakFundingCents 0."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Its revenueRange is verified EVIDENCE quoting the payer's FAQ ('Starting at $25-$50 per hour'); the opening is excluded as a wage, not for want of a rate."
+     },
+     {
+      "opportunityId": "cop_56436a0c43754342be51",
+      "link": "ECONOMICS",
+      "reason": "$0 cost and $0 capital against a published hourly rate."
+     }
+    ],
+    "revisionId": "rev_ac013dc110df_57d257",
+    "digest": "ac013dc110df12a40a4deed8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:13:15.279Z"
+   },
+   "review": {
+    "revisionId": "rev_ac013dc110df_57d257",
+    "revisionDigest": "ac013dc110df12a40a4deed8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_92ac03e79b14402e9048/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_29477c3cc2c84716a6b7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and now startable without breaking a limit. Fulfilment is shown possible before any order: a timed sample site on day 0 is part of the proof and stops all outreach if it fails; FULFILMENT and SETTLES_IN_TIME join CONVERSION, OFFER_AND_PRICE and CURRENT_DEMAND in validation.decides, and price, close rate, build hours and settlement are all carried as UNKNOWN/ASSUMED, not as known. Recomputed: 2 x $500 = $1,000 collected (4 Zelle receipts of $250, days 5, 7, 9, 11), $0 spent, $0 capital, minCash $250, inside the 14-day window with 3 days slack. Steps and ledger now agree (sale 1 delivered/collected day 7, sale 2 day 11). Pass at threshold (1 of 150 by day 5) plus the explicit 2-deposits-by-day-9 checkpoint means the plan either reaches $1,000 or stops by day 9; PayPal-only buyers are a stop because new-seller holds would miss the window. Owner hours (~30.5 h) are stated as an owner input to confirm before day 0, not assumed zero. DataAnnotation is now rejected on its own record (assessment acceptance and timing not guaranteed, work availability depends on demand).",
+    "findings": [
+     "Arithmetic: 4 x $250 = $1,000 by day 11 <= 14; ledger matches steps; trace ownerFunded $0, exposure $0.",
+     "Threshold edge: 1 paid of 150 projects to 3 of 450, but only ~150 more contacts are sent between days 5 and 9 at ~35/day, so the day-9 checkpoint (2 deposits) is the binding test - correctly made a stop.",
+     "Owner hours 30.5 over 14 days is ASSUMED pending the owner's confirmation; if the owner has less, the plan must stop before day 0.",
+     "Zelle-only collection may itself reduce conversion; the measured rate from the test is what decides it, which is correct."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:14:28.227Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Get me $1,000 of cash in hand within 14 days, with no money in.",
+    "terms": "ae06da868dd2b8d1",
+    "openings": {
+     "cop_2d044510d3494b649398": "abcf7818810c2681",
+     "cop_56436a0c43754342be51": "752a648e440c31dd",
+     "cop_c77c549c5f3a4f7383ee": "3cae00f8d6d433f9",
+     "cop_e9bb1449d06b4f379ef8": "e776430f3ec16eae"
+    }
+   },
+   "at": "2026-11-28T06:16:28.871Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

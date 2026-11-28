@@ -1,0 +1,1015 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_c6697a2623be4944ab58",
+   "words": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 800000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$8,000 of settled cash received within 45 days with no owner capital advanced",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "7cd3ce76b72ef67bd722fe22"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_c6697a2623be4944ab58",
+    "contractDigest": "7cd3ce76b72ef67bd722fe22",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no price buyers pay for the collections-care assessment is established",
+     "opportunityIds": [],
+     "why": "The card's only 'price' is a $5,000 state humanities council grant awarded to museums. A grant is money a museum receives, not what a museum pays a supplier for an assessment, so the offer has no established price; without one neither the deal count nor whether $8,000 is reachable from 210 museums can be computed."
+    },
+    "alternatives": [],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Research what small museums are published as paying for a collections-care needs assessment (consultant fee schedules, assessment program fees), with sources and dates",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Quote a fixed price to directors in the state museum association directory and measure paid orders at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "research",
+      "evidence": [
+       "s_vol",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "a published fee or a paid order at a stated price; the $5,000 grant award is not a purchase price"
+     },
+     {
+      "name": "reachable museums",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.08,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "the price those 4 orders paid is not recorded"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#price",
+      "dated": "2026 cycle",
+      "claim": "The state humanities council awards small museums $5,000 project grants for collections care",
+      "population": "grant guidelines (a funder's award, not a buyer's payment)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#buyerVolume",
+      "dated": "2026-11",
+      "claim": "210 small history museums with director emails in the state museum association directory",
+      "population": "small history museums",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#conversionRates",
+      "dated": "2026-11",
+      "claim": "4 paid orders from 50 contacts",
+      "population": "museum directors contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only price on the card is a $5,000 grant award to museums, which is not a purchase price; what a museum pays for this assessment is unestablished, so no deal count, revenue or route to $8,000 can be computed.",
+     "resolution": "Research published fees museums pay for collections-care needs assessments (dated, sourced), then quote that fixed price to the 210 directory museums and record paid orders; at the 8% measured order rate (~16 buyers) the price must be at least $500 per assessment for $8,000 to be reachable inside 45 days.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_43b5957617a6_2c4285",
+    "digest": "43b5957617a67211723ac6b7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_15108bdd7d904a6da09a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:43.171Z"
+   },
+   {
+    "goalId": "wst_c6697a2623be4944ab58",
+    "contractDigest": "7cd3ce76b72ef67bd722fe22",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no price buyers pay for the collections-care assessment is established",
+     "opportunityIds": [],
+     "why": "The card's only 'price' is a $5,000 state humanities council grant awarded to museums. A grant is money a museum receives, not what a museum pays a supplier for an assessment, so the offer has no established price; without one neither the deal count nor whether $8,000 is reachable from 210 museums can be computed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the assessment at $5,000 to the 210 directory museums (2 sales reach $8,000)",
+      "why": "Rejected: $5,000 is the humanities council's grant award to museums, not a price any museum is shown paying for an assessment; adopting it would plan on a figure that is not a purchase price."
+     },
+     {
+      "title": "Price at the grant amount and rely on the 4-of-50 order rate",
+      "why": "Rejected: the 4 paid orders carry no recorded price, so they establish an order rate but not what buyers pay."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Research what small museums are published as paying for a collections-care needs assessment (consultant fee schedules, assessment program fees), with sources and dates",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Quote a fixed price to directors in the state museum association directory and measure paid orders at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "research",
+      "evidence": [
+       "s_vol",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "a published fee or a paid order at a stated price; the $5,000 grant award is not a purchase price"
+     },
+     {
+      "name": "reachable museums",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.08,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "the price those 4 orders paid is not recorded"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#price",
+      "dated": "2026 cycle",
+      "claim": "The state humanities council awards small museums $5,000 project grants for collections care",
+      "population": "grant guidelines (a funder's award, not a buyer's payment)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#buyerVolume",
+      "dated": "2026-11",
+      "claim": "210 small history museums with director emails in the state museum association directory",
+      "population": "small history museums",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#conversionRates",
+      "dated": "2026-11",
+      "claim": "4 paid orders from 50 contacts",
+      "population": "museum directors contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only price on the card is a $5,000 grant award to museums, which is not a purchase price; what a museum pays for this assessment is unestablished, so no deal count, revenue or route to $8,000 can be computed.",
+     "resolution": "Research published fees museums pay for collections-care needs assessments (dated, sourced), then quote that fixed price to the 210 directory museums and record paid orders; at the 8% measured order rate (~16 buyers) the price must be at least $500 per assessment for $8,000 to be reachable inside 45 days.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "deals": null,
+      "price": null,
+      "directCost": 40,
+      "capital": 0,
+      "settlesDay": 13,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a26017b85723_f448d8",
+    "digest": "a26017b8572398dd242ba9dd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_15108bdd7d904a6da09a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:53.758Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_c6697a2623be4944ab58",
+   "contractDigest": "7cd3ce76b72ef67bd722fe22",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no price buyers pay for the collections-care assessment is established",
+    "opportunityIds": [],
+    "why": "The card's only 'price' is a $5,000 state humanities council grant awarded to museums. A grant is money a museum receives, not what a museum pays a supplier for an assessment, so the offer has no established price; without one neither the deal count nor whether $8,000 is reachable from 210 museums can be computed."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the assessment at $5,000 to the 210 directory museums (2 sales reach $8,000)",
+     "why": "Rejected: $5,000 is the humanities council's grant award to museums, not a price any museum is shown paying for an assessment; adopting it would plan on a figure that is not a purchase price."
+    },
+    {
+     "title": "Price at the grant amount and rely on the 4-of-50 order rate",
+     "why": "Rejected: the 4 paid orders carry no recorded price, so they establish an order rate but not what buyers pay."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Research what small museums are published as paying for a collections-care needs assessment (consultant fee schedules, assessment program fees), with sources and dates",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Quote a fixed price to directors in the state museum association directory and measure paid orders at that price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "research",
+     "evidence": [
+      "s_vol",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [],
+     "needs": "a published fee or a paid order at a stated price; the $5,000 grant award is not a purchase price"
+    },
+    {
+     "name": "reachable museums",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.08,
+     "unit": "paid/contacts",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": "the price those 4 orders paid is not recorded"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_f92aa8528d8f44839358#price",
+     "dated": "2026 cycle",
+     "claim": "The state humanities council awards small museums $5,000 project grants for collections care",
+     "population": "grant guidelines (a funder's award, not a buyer's payment)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_f92aa8528d8f44839358"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_f92aa8528d8f44839358#buyerVolume",
+     "dated": "2026-11",
+     "claim": "210 small history museums with director emails in the state museum association directory",
+     "population": "small history museums",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f92aa8528d8f44839358"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_f92aa8528d8f44839358#conversionRates",
+     "dated": "2026-11",
+     "claim": "4 paid orders from 50 contacts",
+     "population": "museum directors contacted",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f92aa8528d8f44839358"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the only price on the card is a $5,000 grant award to museums, which is not a purchase price; what a museum pays for this assessment is unestablished, so no deal count, revenue or route to $8,000 can be computed.",
+    "resolution": "Research published fees museums pay for collections-care needs assessments (dated, sourced), then quote that fixed price to the 210 directory museums and record paid orders; at the 8% measured order rate (~16 buyers) the price must be at least $500 per assessment for $8,000 to be reachable inside 45 days.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_f92aa8528d8f44839358",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_f92aa8528d8f44839358",
+     "deals": null,
+     "price": null,
+     "directCost": 40,
+     "capital": 0,
+     "settlesDay": 13,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a26017b85723_f448d8",
+   "digest": "a26017b8572398dd242ba9dd",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_15108bdd7d904a6da09a/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:58:53.758Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_a26017b85723_f448d8",
+   "digest": "a26017b8572398dd242ba9dd",
+   "contractDigest": "7cd3ce76b72ef67bd722fe22",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 8000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 39168× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Directors of small history museums — A written \" needs [figure withheld] and keeps [figure withheld], 4930× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Directors of small history museums\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_f92aa8528d8f44839358"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Directors of small history museums",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Directors of small history museums",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 436.6248443549428
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 8000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "title": "Collections-care needs assessment for small history museums",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Directors of small history museums",
+       "reachableChannel": "Email to the museums listed in the state museum association's directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:58.388Z",
+       "offerScope": "A written collections-care needs assessment built by Brain from the museum's inventory and storage survey.",
+       "priceCents": 500000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "small history museums",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the museums listed in the state museum association's directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 4 accepted of 50 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 40, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "210 small history museums are listed with director emails in the state museum association's directory; each documents collections-care needs for accreditation.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A written collections-care needs assessment built by Brain from the museum's inventory and storage survey. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "4 paid orders from 50 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$40",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Directors of small history museums",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state humanities council awards small museums $5,000 project grants for collections care (grant guidelines, 2026 cycle).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 800000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:56:17.536Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_a26017b85723_f448d8",
+    "revisionDigest": "a26017b8572398dd242ba9dd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_15108bdd7d904a6da09a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7f4fc1254d354bcda704/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap: OFFER_AND_PRICE. The card's only price fact is a $5,000 state humanities council project grant awarded TO museums - money a museum receives from a funder, not a price a museum pays a supplier for an assessment (NOT_A_PURCHASE). The 4/50 paid orders carry no recorded price. With no evidenced price, no deal count or reach to $8,000 can be computed, and the revision correctly refuses the tempting 2 x $5,000 plan. It does not misstate missing evidence as a constraint (constraints empty). Its resolution is concrete and the arithmetic is right: 210 directory museums x 8% measured order rate = ~16.8, so 16 buyers; $8,000 / 16 = $500 minimum price for reach inside 45 days (cost $40, $0 capital, 10 days to cash). Brain's own planner agrees (OFFER_AND_PRICE unestablished, reach 0).",
+    "findings": [
+     "Grant award ($5,000) is a funder's payment to museums, not a purchase price: correctly rejected.",
+     "Arithmetic checked: 0.08 x 210 = 16.8 buyers; $8,000 / 16 = $500 threshold price; 2 x $5,000 alternative correctly rejected.",
+     "No spend, no capital, ledger empty: consistent with the $0 exposure cap.",
+     "Once research records a published fee at or above $500 (or a test records paid orders at a stated price), this should be re-planned as CONDITIONAL with proof = paid orders at that price, stop = order rate well below 8% after the first ~50 contacts."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:55.790Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_a26017b85723_f448d8",
+   "digest": "a26017b8572398dd242ba9dd",
+   "contractDigest": "7cd3ce76b72ef67bd722fe22",
+   "plan": {
+    "goalId": "wst_c6697a2623be4944ab58",
+    "contractDigest": "7cd3ce76b72ef67bd722fe22",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: no price buyers pay for the collections-care assessment is established",
+     "opportunityIds": [],
+     "why": "The card's only 'price' is a $5,000 state humanities council grant awarded to museums. A grant is money a museum receives, not what a museum pays a supplier for an assessment, so the offer has no established price; without one neither the deal count nor whether $8,000 is reachable from 210 museums can be computed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the assessment at $5,000 to the 210 directory museums (2 sales reach $8,000)",
+      "why": "Rejected: $5,000 is the humanities council's grant award to museums, not a price any museum is shown paying for an assessment; adopting it would plan on a figure that is not a purchase price."
+     },
+     {
+      "title": "Price at the grant amount and rely on the 4-of-50 order rate",
+      "why": "Rejected: the 4 paid orders carry no recorded price, so they establish an order rate but not what buyers pay."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Research what small museums are published as paying for a collections-care needs assessment (consultant fee schedules, assessment program fees), with sources and dates",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Quote a fixed price to directors in the state museum association directory and measure paid orders at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "research",
+      "evidence": [
+       "s_vol",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "a published fee or a paid order at a stated price; the $5,000 grant award is not a purchase price"
+     },
+     {
+      "name": "reachable museums",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.08,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "the price those 4 orders paid is not recorded"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#price",
+      "dated": "2026 cycle",
+      "claim": "The state humanities council awards small museums $5,000 project grants for collections care",
+      "population": "grant guidelines (a funder's award, not a buyer's payment)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#buyerVolume",
+      "dated": "2026-11",
+      "claim": "210 small history museums with director emails in the state museum association directory",
+      "population": "small history museums",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_f92aa8528d8f44839358#conversionRates",
+      "dated": "2026-11",
+      "claim": "4 paid orders from 50 contacts",
+      "population": "museum directors contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f92aa8528d8f44839358"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only price on the card is a $5,000 grant award to museums, which is not a purchase price; what a museum pays for this assessment is unestablished, so no deal count, revenue or route to $8,000 can be computed.",
+     "resolution": "Research published fees museums pay for collections-care needs assessments (dated, sourced), then quote that fixed price to the 210 directory museums and record paid orders; at the 8% measured order rate (~16 buyers) the price must be at least $500 per assessment for $8,000 to be reachable inside 45 days.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f92aa8528d8f44839358",
+      "deals": null,
+      "price": null,
+      "directCost": 40,
+      "capital": 0,
+      "settlesDay": 13,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a26017b85723_f448d8",
+    "digest": "a26017b8572398dd242ba9dd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_15108bdd7d904a6da09a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:53.758Z"
+   },
+   "review": {
+    "revisionId": "rev_a26017b85723_f448d8",
+    "revisionDigest": "a26017b8572398dd242ba9dd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_15108bdd7d904a6da09a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7f4fc1254d354bcda704/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap: OFFER_AND_PRICE. The card's only price fact is a $5,000 state humanities council project grant awarded TO museums - money a museum receives from a funder, not a price a museum pays a supplier for an assessment (NOT_A_PURCHASE). The 4/50 paid orders carry no recorded price. With no evidenced price, no deal count or reach to $8,000 can be computed, and the revision correctly refuses the tempting 2 x $5,000 plan. It does not misstate missing evidence as a constraint (constraints empty). Its resolution is concrete and the arithmetic is right: 210 directory museums x 8% measured order rate = ~16.8, so 16 buyers; $8,000 / 16 = $500 minimum price for reach inside 45 days (cost $40, $0 capital, 10 days to cash). Brain's own planner agrees (OFFER_AND_PRICE unestablished, reach 0).",
+    "findings": [
+     "Grant award ($5,000) is a funder's payment to museums, not a purchase price: correctly rejected.",
+     "Arithmetic checked: 0.08 x 210 = 16.8 buyers; $8,000 / 16 = $500 threshold price; 2 x $5,000 alternative correctly rejected.",
+     "No spend, no capital, ledger empty: consistent with the $0 exposure cap.",
+     "Once research records a published fee at or above $500 (or a test records paid orders at a stated price), this should be re-planned as CONDITIONAL with proof = paid orders at that price, stop = order rate well below 8% after the first ~50 contacts."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:55.790Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "fa35d661d9728fb7",
+    "openings": {
+     "cop_f92aa8528d8f44839358": "43e7c0af1434c823"
+    }
+   },
+   "at": "2026-11-28T06:01:49.606Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

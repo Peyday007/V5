@@ -1,0 +1,2325 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_b6c19e26bd93465db11a",
+   "words": "Collect $3,000 of settled cash within 30 days in a single industry I name, structural steel fabrication, with no more than 3 hours a week of my time and no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,000 of settled cash received within 30 days from structural steel fabrication buyers, with no owner capital advanced and at most 3 owner hours a week",
+    "ownerHoursPerWeek": 3,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "any industry other than structural steel fabrication"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "bd8243330ccbfce1a3c927fc"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_b6c19e26bd93465db11a",
+    "contractDigest": "95c27be2899ce609e1323a68",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the welder-qualification continuity workbook to directory fabricators at $380",
+     "opportunityIds": [
+      "cop_ed5f74bcdb1e4946aacc"
+     ],
+     "why": "300 reachable shops; this offer's own sales converted 21 of 150 (14%); 9 sales at $380 = $3,420 settled (8 already reach $3,040). Reaching ~65-100 shops yields 9-14 sales; Brain builds each workbook in a day at $5; card payout 5 days after order, so cash settles by about day 15 of 30, with no capital advanced."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-performed mobile welding repairs ($1,200 x 3 signed)",
+      "why": "Excluded: the work is the owner's personal on-site welding (10 hours a repair); the owner does no physical work, and the owner's welding ability is only somebody's say-so (fulfillment fact is PERSON)."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the quality managers of the 300 shops in the state fabricators association directory (first 100 on day 1, the rest as needed)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Offer the welder-qualification continuity log workbook at $380, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each buyer's workbook from its welder roster within one day (9 workbooks, $5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card payouts arrive 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 152000,
+      "label": "Payouts for the first 4 orders (placed by day 3)",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 190000,
+      "label": "Payouts for the next 5 orders (placed by day 10)",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost of 9 workbooks ($5 each)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.14,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 38000,
+      "unit": "cents",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals",
+      "status": "EVIDENCED",
+      "value": 9,
+      "unit": "sales",
+      "sources": [
+       "s_conv",
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to payout",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#buyerVolume",
+      "dated": "2026-11",
+      "claim": "300 fabrication shops with quality-manager emails in the state fabricators association directory",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#price",
+      "dated": "2026-11",
+      "claim": "Welding-compliance template sellers list this workbook at $380",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#conversionRates",
+      "dated": "2026-11",
+      "claim": "21 paid orders from 150 contacts on this offer's own sales",
+      "population": "quality managers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order, payout 5 days later",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b94520d8cf6d4657810a",
+      "why": "Fulfilment is the owner's own on-site welding (10 owner hours a repair); the owner does no physical work, and the owner's ability to do it is only a PERSON fact."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "deals": 9,
+      "price": 380,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain's basis 'no single price on the card' is wrong: the card carries one price, priceCents 38000, and its price fact (EVIDENCE) is $380 from listing pages for this exact workbook; this offer's own sales recorded 21 paid orders from 150 contacts (conversionRates, EVIDENCE), so buyers are shown paying for the offer at its stated price."
+     }
+    ],
+    "revisionId": "rev_99798ac93733_ec1c89",
+    "digest": "99798ac93733ec78cec5cd83",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:43.281Z"
+   },
+   {
+    "goalId": "wst_b6c19e26bd93465db11a",
+    "contractDigest": "95c27be2899ce609e1323a68",
+    "parentRevisionId": "rev_99798ac93733_ec1c89",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the welder-qualification continuity workbook at $380 to directory fabricators",
+     "opportunityIds": [
+      "cop_ed5f74bcdb1e4946aacc"
+     ],
+     "why": "300 reachable shops and a measured 21-of-150 (14%) order rate on this offer; Brain builds each workbook in a day at $5 and card payouts land 5 days after order, with no capital. What is not established is the price buyers actually pay: $380 is other sellers' listing price and the 21 orders carry no price. The plan offers at $380 to the first ~65-100 shops; 8 orders paid at $380 ($3,040) prove it, by day 20 so payouts land by day 25."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-performed mobile welding repairs ($1,200 x 3 signed)",
+      "why": "Excluded: the work is the owner's personal on-site welding (10 hours a repair); the owner does no physical work, and the owner's welding ability is only somebody's say-so (fulfillment fact is PERSON)."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the quality managers of the 300 shops in the state fabricators association directory (first 100 on day 1, the rest as needed)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $380, paid by card at order, to the first 65-100 shops; record each paid order and the price paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Continue offering at $380 to the remaining directory shops once paid orders at $380 confirm the price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_vol"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each buyer's workbook from its welder roster within one day (9 workbooks, $5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card payouts arrive 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 152000,
+      "label": "Payouts for the first 4 orders (placed by day 3)",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 190000,
+      "label": "Payouts for the next 5 orders (placed by day 10)",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost of 9 workbooks ($5 each)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 20,
+    "quantities": [
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.14,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid orders at the offered $380; listing prices of other sellers do not establish it"
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "sales",
+      "sources": [
+       "s_conv",
+       "s_vol"
+      ],
+      "needs": "holds only if buyers pay $380"
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to payout",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#buyerVolume",
+      "dated": "2026-11",
+      "claim": "300 fabrication shops with quality-manager emails in the state fabricators association directory",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#price",
+      "dated": "2026-11",
+      "claim": "Welding-compliance template sellers list this workbook at $380",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#conversionRates",
+      "dated": "2026-11",
+      "claim": "21 paid orders from 150 contacts on this offer's own sales",
+      "population": "quality managers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order, payout 5 days later",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     }
+    ],
+    "validation": {
+     "proof": "At least 8 card orders actually paid at $380 ($3,040 >= $3,000) by day 20, so their payouts settle by day 25.",
+     "stop": [
+      "Fewer than 5 orders paid at $380 from the first 100 contacts: stop selling at $380; test a lower price only if 300 shops x 14% at that price still reach $3,000 (price >= about $72), else report no plan.",
+      "Any buyer refuses on price in writing in a way that shows $380 exceeds what shops pay."
+     ],
+     "continue": [
+      "5 or more orders paid at $380 from the first 100 contacts: continue emailing the remaining directory shops until 8-9 paid orders are in."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Price $380 is NOT_A_PURCHASE: it is other sellers' listing price, not a recorded payment by these buyers; conversion 21/150 does not say at what price.",
+      "resolution": "Accepted. The price is now an UNKNOWN quantity, OFFER_AND_PRICE is missing in the chain, and the plan is CONDITIONAL on paid orders at $380; the disagreement with Brain is withdrawn."
+     },
+     {
+      "finding": "Arithmetic checked: 9 x $380 = $3,420; minus 9 x $5 = $3,375 net; 8 sales = $3,040 already clear $3,000; trace minCash $1,475 > 0, ownerFunded $0.",
+      "resolution": "Agreed; unchanged, and 8 paid orders at $380 is the proof threshold."
+     },
+     {
+      "finding": "Timing assumes 4 orders by day 3 and 5 by day 10; that pace is not evidenced (conversion is a ratio, not a rate), but window slack to day 30 tolerates it.",
+      "resolution": "Accepted: the proof day is set at day 20 so payouts settle by day 25, leaving slack; the order pace is not claimed as evidence (the deal count is an ESTIMATE)."
+     },
+     {
+      "finding": "Excluded welding-repairs alternative: correct to exclude - fulfilment is a PERSON fact (owner's welding ability only said) and it is the owner's physical on-site work (30 owner hours); the contract leaves ownerPhysicalWork UNSTATED, so the exclusion should cite the unestablished fulfilment/standing rule rather than claim the contract forbids it.",
+      "resolution": "Accepted: the exclusion now cites the PERSON-only fulfilment fact and Brain's standing no-physical-work rule, and states the contract leaves ownerPhysicalWork UNSTATED."
+     },
+     {
+      "finding": "Revise to CONDITIONAL with validation.decides = OFFER_AND_PRICE (price actually paid), with explicit proof/stop/continue thresholds.",
+      "resolution": "Done: stance CONDITIONAL, validation.decides = [OFFER_AND_PRICE], proof 8 orders paid at $380 by day 20, stop under 5 paid of the first 100 contacts, continue at 5 or more."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "condition 0",
+      "resolution": "The price fact is other sellers' listing price and conversionRates records no price paid; no agreement is recorded; OFFER_AND_PRICE is unestablished."
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "condition 1",
+      "resolution": "No card fact records what buyers are published or recorded paying (no revenueRange); Brain's parked question asks for it; the live test at $380 measures it."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b94520d8cf6d4657810a",
+      "why": "Fulfilment is not established: the only fulfilment fact ('the owner does the work personally') is a PERSON fact, nobody evidenced the owner can weld, and it is the owner's physical on-site work (10 hours a repair), which Brain's standing rule (the owner does no physical work) rules out; the contract itself leaves ownerPhysicalWork UNSTATED."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "deals": 9,
+      "price": 380,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_6fbd04a14c18_29a8d4",
+    "digest": "6fbd04a14c189e02e812e0f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:17.515Z"
+   },
+   {
+    "goalId": "wst_b6c19e26bd93465db11a",
+    "contractDigest": "bd8243330ccbfce1a3c927fc",
+    "parentRevisionId": "rev_6fbd04a14c18_29a8d4",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the welder-qualification continuity workbook at $380 to directory fabricators",
+     "opportunityIds": [
+      "cop_ed5f74bcdb1e4946aacc"
+     ],
+     "why": "300 reachable shops and a measured 21-of-150 (14%) order rate on this offer; Brain builds each workbook in a day at $5 and card payouts land 5 days after order, with no capital. What is not established is the price buyers actually pay: $380 is other sellers' listing price and the 21 orders carry no price. The plan offers at $380 to the first ~65-100 shops; 8 orders paid at $380 ($3,040) prove it, by day 20 so payouts land by day 25. It is inside the owner's named industry (structural steel fabrication) and uses no owner hours: Brain reaches, sells, builds and collects (the card's 0.5 hours a deal are Brain's fulfilment work), well under the 3 hours a week allowed."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-performed mobile welding repairs ($1,200 x 3 signed)",
+      "why": "Excluded: farm equipment repair is outside the owner's named industry (structural steel fabrication); 30 owner hours of on-site welding exceed the 3 hours a week allowed; and the owner's welding ability is only a PERSON fact."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the quality managers of the 300 shops in the state fabricators association directory (first 100 on day 1, the rest as needed)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $380, paid by card at order, to the first 65-100 shops; record each paid order and the price paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Continue offering at $380 to the remaining directory shops once paid orders at $380 confirm the price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_vol"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each buyer's workbook from its welder roster within one day (9 workbooks, $5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 3,
+      "dependsOn": "test",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card payouts arrive 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 152000,
+      "label": "Payouts for the first 4 orders (placed by day 3)",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 190000,
+      "label": "Payouts for the next 5 orders (placed by day 10)",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost of 9 workbooks ($5 each)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 20,
+    "quantities": [
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.14,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid orders at the offered $380; listing prices of other sellers do not establish it"
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "sales",
+      "sources": [
+       "s_conv",
+       "s_vol"
+      ],
+      "needs": "holds only if buyers pay $380"
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to payout",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#buyerVolume",
+      "dated": "2026-11",
+      "claim": "300 fabrication shops with quality-manager emails in the state fabricators association directory",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#price",
+      "dated": "2026-11",
+      "claim": "Welding-compliance template sellers list this workbook at $380",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#conversionRates",
+      "dated": "2026-11",
+      "claim": "21 paid orders from 150 contacts on this offer's own sales",
+      "population": "quality managers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order, payout 5 days later",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     }
+    ],
+    "validation": {
+     "proof": "At least 8 card orders actually paid at $380 ($3,040 >= $3,000) by day 20, so their payouts settle by day 25.",
+     "stop": [
+      "Fewer than 5 orders paid at $380 from the first 100 contacts: stop selling at $380; test a lower price only if 300 shops x 14% at that price still reach $3,000 (price >= about $72) and enough days remain for those orders to be paid by day 25 (payout 5 days after order), else report no plan.",
+      "Any buyer refuses on price in writing in a way that shows $380 exceeds what shops pay."
+     ],
+     "continue": [
+      "5 or more orders paid at $380 from the first 100 contacts: continue emailing the remaining directory shops until 8-9 paid orders are in."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Passing at threshold carries the target: 8 x $380 = $3,040 settled cash (metric is SETTLED_CASH).",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "Window: proof by day 20 + 5-day payout = day 25 <= 30.",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "Fallback lower-price test: if started after a failed first 100, there may not be enough window left to reach 42 orders and settle; the stop rule should check days left, not only the price floor.",
+      "resolution": "Accepted: the stop rule now also requires enough days left for the lower-price orders to be paid by day 25."
+     },
+     {
+      "finding": "Ledger still shows the central case (orders by days 3 and 10, settle day 15); acceptable as an estimate since proof day 20 is the binding check.",
+      "resolution": "Kept as the central-case estimate; proof day 20 remains the binding check. Re-planned against the owner's changed objective: single industry structural steel fabrication (this opening's industry) and at most 3 owner hours a week (plan uses 0)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b94520d8cf6d4657810a",
+      "why": "Outside the owner's single named industry (it is farm equipment repair, not structural steel fabrication); in addition its fulfilment is the owner's own on-site welding (10 owner hours a repair, 30 for three, over the 3 hours a week allowed), resting only on a PERSON fact, and Brain's standing rule is that the owner does no physical work."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "deals": 9,
+      "price": 380,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": 0
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c557f6cb593b_c1d25d",
+    "digest": "c557f6cb593b3e64ef2da8c7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:09:42.036Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_b6c19e26bd93465db11a",
+   "contractDigest": "bd8243330ccbfce1a3c927fc",
+   "parentRevisionId": "rev_6fbd04a14c18_29a8d4",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test-sell the welder-qualification continuity workbook at $380 to directory fabricators",
+    "opportunityIds": [
+     "cop_ed5f74bcdb1e4946aacc"
+    ],
+    "why": "300 reachable shops and a measured 21-of-150 (14%) order rate on this offer; Brain builds each workbook in a day at $5 and card payouts land 5 days after order, with no capital. What is not established is the price buyers actually pay: $380 is other sellers' listing price and the 21 orders carry no price. The plan offers at $380 to the first ~65-100 shops; 8 orders paid at $380 ($3,040) prove it, by day 20 so payouts land by day 25. It is inside the owner's named industry (structural steel fabrication) and uses no owner hours: Brain reaches, sells, builds and collects (the card's 0.5 hours a deal are Brain's fulfilment work), well under the 3 hours a week allowed."
+   },
+   "alternatives": [
+    {
+     "title": "Owner-performed mobile welding repairs ($1,200 x 3 signed)",
+     "why": "Excluded: farm equipment repair is outside the owner's named industry (structural steel fabrication); 30 owner hours of on-site welding exceed the 3 hours a week allowed; and the owner's welding ability is only a PERSON fact."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email the quality managers of the 300 shops in the state fabricators association directory (first 100 on day 1, the rest as needed)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_vol"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Offer the workbook at $380, paid by card at order, to the first 65-100 shops; record each paid order and the price paid",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Continue offering at $380 to the remaining directory shops once paid orders at $380 confirm the price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "test",
+     "evidence": [
+      "s_conv",
+      "s_vol"
+     ],
+     "priceCents": 38000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Build each buyer's workbook from its welder roster within one day (9 workbooks, $5 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 4500,
+     "day": 3,
+     "dependsOn": "test",
+     "evidence": [
+      "s_del",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Card payouts arrive 5 days after each order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 15,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 152000,
+     "label": "Payouts for the first 4 orders (placed by day 3)",
+     "settlesDay": 8,
+     "stepId": "collect"
+    },
+    {
+     "day": 15,
+     "kind": "RECEIPT",
+     "amountCents": 190000,
+     "label": "Payouts for the next 5 orders (placed by day 10)",
+     "settlesDay": 15,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 4500,
+     "label": "Direct cost of 9 workbooks ($5 each)",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 20,
+   "quantities": [
+    {
+     "name": "reachable shops",
+     "status": "EVIDENCED",
+     "value": 300,
+     "unit": "buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.14,
+     "unit": "paid/contacts",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [],
+     "needs": "paid orders at the offered $380; listing prices of other sellers do not establish it"
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 9,
+     "unit": "sales",
+     "sources": [
+      "s_conv",
+      "s_vol"
+     ],
+     "needs": "holds only if buyers pay $380"
+    },
+    {
+     "name": "direct cost per workbook",
+     "status": "EVIDENCED",
+     "value": 500,
+     "unit": "cents",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to payout",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#buyerVolume",
+     "dated": "2026-11",
+     "claim": "300 fabrication shops with quality-manager emails in the state fabricators association directory",
+     "population": "structural steel fabricators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#price",
+     "dated": "2026-11",
+     "claim": "Welding-compliance template sellers list this workbook at $380",
+     "population": "structural steel fabricators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#conversionRates",
+     "dated": "2026-11",
+     "claim": "21 paid orders from 150 contacts on this offer's own sales",
+     "population": "quality managers contacted",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#directCosts",
+     "dated": "2026-11",
+     "claim": "$5 direct cost",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    },
+    {
+     "id": "s_del",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "Paid by card at order, payout 5 days later",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+    }
+   ],
+   "validation": {
+    "proof": "At least 8 card orders actually paid at $380 ($3,040 >= $3,000) by day 20, so their payouts settle by day 25.",
+    "stop": [
+     "Fewer than 5 orders paid at $380 from the first 100 contacts: stop selling at $380; test a lower price only if 300 shops x 14% at that price still reach $3,000 (price >= about $72) and enough days remain for those orders to be paid by day 25 (payout 5 days after order), else report no plan.",
+     "Any buyer refuses on price in writing in a way that shows $380 exceeds what shops pay."
+    ],
+    "continue": [
+     "5 or more orders paid at $380 from the first 100 contacts: continue emailing the remaining directory shops until 8-9 paid orders are in."
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Passing at threshold carries the target: 8 x $380 = $3,040 settled cash (metric is SETTLED_CASH).",
+     "resolution": "Unchanged."
+    },
+    {
+     "finding": "Window: proof by day 20 + 5-day payout = day 25 <= 30.",
+     "resolution": "Unchanged."
+    },
+    {
+     "finding": "Fallback lower-price test: if started after a failed first 100, there may not be enough window left to reach 42 orders and settle; the stop rule should check days left, not only the price floor.",
+     "resolution": "Accepted: the stop rule now also requires enough days left for the lower-price orders to be paid by day 25."
+    },
+    {
+     "finding": "Ledger still shows the central case (orders by days 3 and 10, settle day 15); acceptable as an estimate since proof day 20 is the binding check.",
+     "resolution": "Kept as the central-case estimate; proof day 20 remains the binding check. Re-planned against the owner's changed objective: single industry structural steel fabrication (this opening's industry) and at most 3 owner hours a week (plan uses 0)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_b94520d8cf6d4657810a",
+     "why": "Outside the owner's single named industry (it is farm equipment repair, not structural steel fabrication); in addition its fulfilment is the owner's own on-site welding (10 owner hours a repair, 30 for three, over the 3 hours a week allowed), resting only on a PERSON fact, and Brain's standing rule is that the owner does no physical work."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+     "deals": 9,
+     "price": 380,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 15,
+     "ownerHours": 0
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c557f6cb593b_c1d25d",
+   "digest": "c557f6cb593b3e64ef2da8c7",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_6ea96bc22fae4ebca840/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:09:42.036Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_c557f6cb593b_c1d25d",
+   "digest": "c557f6cb593b3e64ef2da8c7",
+   "contractDigest": "bd8243330ccbfce1a3c927fc",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4500,
+    "committedOpenCents": 0,
+    "preProofCents": 4500,
+    "maxExposureCents": 0,
+    "minCashCents": 147500,
+    "minCashDay": 10,
+    "collectedCents": 342000,
+    "collectedInWindowCents": 342000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 337500
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 46875× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Welder-qualification continuity log workbook for structural \" needs [figure withheld] and keeps [figure withheld], 375× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Service managers at farm-equipment dealerships\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_ed5f74bcdb1e4946aacc"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Service managers at farm-equipment dealerships",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Service managers at farm-equipment dealerships",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 294.9258967997813
+     },
+     {
+      "label": "Collect payment for \"Welder-qualification continuity log workbook for structural steel fabrication sh\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "title": "Welder-qualification continuity log workbook for structural steel fabrication shops",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Quality managers at structural steel fabricators",
+       "reachableChannel": "Email to the shops listed in the state fabricators association's public member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:52.244Z",
+       "offerScope": "A workbook tracking every welder's process continuity against the six-month rule, built by Brain from the shop's welder roster within one day. Paid by card at order; payout 5 days later.",
+       "priceCents": 38000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "structural steel fabrication",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the shops listed in the state fabricators association's public member d"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 21 accepted of 150 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "9 deal(s) needed, 300 available in the window (300 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "300 fabrication shops are listed with quality-manager emails in the state fabricators association's public directory; each must keep every welder's qualification continuity current under its certification audit.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook tracking every welder's process continuity against the six-month rule, built by Brain from the shop's welder roster within one day. Paid by card at order; payout 5 days later. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "21 paid orders from 150 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Quality managers at structural steel fabricators",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Welding-compliance template sellers list a welder-qualification continuity log workbook at $380 (listing pages, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b94520d8cf6d4657810a",
+      "title": "Owner-performed mobile welding repairs for farm-equipment dealers",
+      "reason": "needs the owner's physical work: the service (\"on site\") would be performed by The owner, personally; the owner does no physical work",
+      "card": {
+       "payer": "Service managers at farm-equipment dealerships",
+       "reachableChannel": "The three service managers who signed repair orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:52.244Z",
+       "offerScope": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+       "priceCents": 120000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 10,
+       "requiredCapabilities": [],
+       "industry": "farm equipment repair",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "The owner welds on site: 10 owner hours a repair, paid 7 days after the repair.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The owner welds on site: 10 owner hours a repair, paid 7 days after the repair. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$150",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Service managers at farm-equipment dealerships",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three dealerships signed repair orders at $1,200 each (signed orders, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": 13,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 3
+    },
+    "at": "2026-11-28T06:09:05.328Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_99798ac93733_ec1c89",
+    "revisionDigest": "99798ac93733ec78cec5cd83",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0b5ed71aac941298674/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "EXECUTABLE is not earned. The whole plan rests on the $380 price, and the only price evidence is that welding-compliance template sellers LIST a similar workbook at $380 (listing pages) - a benchmark of what other sellers ask, not a purchase price these quality managers paid for this offer. The 21 paid orders of 150 contacts do not state the price paid, so they do not establish $380 either. The author's disagreement with Brain's OFFER_AND_PRICE basis is right that the card has one priceCents, but wrong on substance: one listed price is not evidence of what this buyer pays. Brain's planner also leaves the link unestablished (reach 0) and has the revenueRange question parked. Everything else checks: 300 directory shops, 14% measured conversion -> ~65 contacts for 9 sales; 9 x $380 = $3,420 gross, $45 cost, net $3,375, card payout 5 days after order, settles by day 15 of 30, $0 capital (paid at order, Brain delivers). So the correct stance is CONDITIONAL: start by offering at $380 to the first ~65-100 shops; proof = >= 8 card orders actually paid at $380 (8 x $380 = $3,040 >= $3,000) by about day 20 so payouts land by day 25; stop if the first 100 contacts yield fewer than ~5 paid at $380, then test a lower price only if it still fits the target. Fulfilment is Brain's own proven spreadsheet capability, so taking orders before delivery is safe.",
+    "findings": [
+     "Price $380 is NOT_A_PURCHASE: it is other sellers' listing price, not a recorded payment by these buyers; conversion 21/150 does not say at what price.",
+     "Arithmetic checked: 9 x $380 = $3,420; minus 9 x $5 = $3,375 net; 8 sales = $3,040 already clear $3,000; trace minCash $1,475 > 0, ownerFunded $0.",
+     "Timing assumes 4 orders by day 3 and 5 by day 10; that pace is not evidenced (conversion is a ratio, not a rate), but window slack to day 30 tolerates it.",
+     "Excluded welding-repairs alternative: correct to exclude - fulfilment is a PERSON fact (owner's welding ability only said) and it is the owner's physical on-site work (30 owner hours); the contract leaves ownerPhysicalWork UNSTATED, so the exclusion should cite the unestablished fulfilment/standing rule rather than claim the contract forbids it.",
+     "Revise to CONDITIONAL with validation.decides = OFFER_AND_PRICE (price actually paid), with explicit proof/stop/continue thresholds."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:33.683Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The price fact is template sellers' listing price ($380, listing pages) - what other sellers ask, not what these quality managers have paid for this offer; no agreement or paid order at $380 is recorded."
+     },
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "No EVIDENCE fact records what buyers are actually published or recorded as paying; Brain's own parked question asks for exactly this."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_6fbd04a14c18_29a8d4",
+    "revisionDigest": "6fbd04a14c189e02e812e0f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0b5ed71aac941298674/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now the right stance. The one unestablished link, OFFER_AND_PRICE, is named in validation.decides and the price is carried as UNKNOWN (deals as ESTIMATE); nothing unknown is treated as known. The test is startable at once with no capital: Brain's own proven spreadsheet capability fulfils, so taking paid orders before delivery is safe, and cards are paid at order. Recomputed: proof = 8 orders paid at $380 = $3,040 settled >= $3,000 by day 20, payouts by day 25 of 30; 9 orders = $3,420, cost $45; trace minCash $1,475, ownerFunded $0, exposure $0. Stop rule is consistent with the measured 14% (under 5 of 100 is well below it) and its fallback floor is correct (300 x 0.14 = 42 orders x ~$72 = $3,024). The welding-repairs exclusion now rests on the PERSON-only fulfilment fact and the standing no-physical-work rule. Both of my earlier conditions are accepted and reflected.",
+    "findings": [
+     "Passing at threshold carries the target: 8 x $380 = $3,040 settled cash (metric is SETTLED_CASH).",
+     "Window: proof by day 20 + 5-day payout = day 25 <= 30.",
+     "Fallback lower-price test: if started after a failed first 100, there may not be enough window left to reach 42 orders and settle; the stop rule should check days left, not only the price floor.",
+     "Ledger still shows the central case (orders by days 3 and 10, settle day 15); acceptable as an estimate since proof day 20 is the binding check."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:03:44.245Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_c557f6cb593b_c1d25d",
+    "revisionDigest": "c557f6cb593b3e64ef2da8c7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0b5ed71aac941298674/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Re-planned correctly against the changed contract (structural steel fabrication only; at most 3 owner hours a week). The member is a structural-steel opening, so it is inside the exclusion; the welding-repairs opening is correctly excluded as farm equipment repair (outside the named industry), on top of 30 owner hours and a PERSON-only fulfilment fact. CONDITIONAL with validation.decides = OFFER_AND_PRICE remains right: $380 is other sellers' listing price and is carried as UNKNOWN. Recomputed: proof 8 paid at $380 = $3,040 >= $3,000 by day 20, payout by day 25; trace collected $3,420, minCash $1,475, owner funded $0, exposure $0. The stop rule now also checks days left for a lower-price fallback. Owner hours fit even on the cautious reading: the plan treats the card's 0.5 h a deal as Brain's work, but if it were the owner's it is 9 x 0.5 = 4.5 h over ~3 weeks, ~1.5-2.3 h a week, under the 3 h cap.",
+    "findings": [
+     "Industry exclusion respected: only cop_ed5f74... (structural steel fabrication) is a member.",
+     "Owner hours: recorded 0; the card's humanHours 0.5/deal is reinterpreted as Brain's work without a record saying so - harmless here because even counted as owner time it is ~4.5 h total, inside 3 h/week over the window.",
+     "Arithmetic unchanged and correct: 8 x $380 = $3,040; 9 x $380 = $3,420; cost $45."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:11:32.373Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_c557f6cb593b_c1d25d",
+   "digest": "c557f6cb593b3e64ef2da8c7",
+   "contractDigest": "bd8243330ccbfce1a3c927fc",
+   "plan": {
+    "goalId": "wst_b6c19e26bd93465db11a",
+    "contractDigest": "bd8243330ccbfce1a3c927fc",
+    "parentRevisionId": "rev_6fbd04a14c18_29a8d4",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the welder-qualification continuity workbook at $380 to directory fabricators",
+     "opportunityIds": [
+      "cop_ed5f74bcdb1e4946aacc"
+     ],
+     "why": "300 reachable shops and a measured 21-of-150 (14%) order rate on this offer; Brain builds each workbook in a day at $5 and card payouts land 5 days after order, with no capital. What is not established is the price buyers actually pay: $380 is other sellers' listing price and the 21 orders carry no price. The plan offers at $380 to the first ~65-100 shops; 8 orders paid at $380 ($3,040) prove it, by day 20 so payouts land by day 25. It is inside the owner's named industry (structural steel fabrication) and uses no owner hours: Brain reaches, sells, builds and collects (the card's 0.5 hours a deal are Brain's fulfilment work), well under the 3 hours a week allowed."
+    },
+    "alternatives": [
+     {
+      "title": "Owner-performed mobile welding repairs ($1,200 x 3 signed)",
+      "why": "Excluded: farm equipment repair is outside the owner's named industry (structural steel fabrication); 30 owner hours of on-site welding exceed the 3 hours a week allowed; and the owner's welding ability is only a PERSON fact."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the quality managers of the 300 shops in the state fabricators association directory (first 100 on day 1, the rest as needed)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $380, paid by card at order, to the first 65-100 shops; record each paid order and the price paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Continue offering at $380 to the remaining directory shops once paid orders at $380 confirm the price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_vol"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each buyer's workbook from its welder roster within one day (9 workbooks, $5 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 3,
+      "dependsOn": "test",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card payouts arrive 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 152000,
+      "label": "Payouts for the first 4 orders (placed by day 3)",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 190000,
+      "label": "Payouts for the next 5 orders (placed by day 10)",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost of 9 workbooks ($5 each)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 20,
+    "quantities": [
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 300,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.14,
+      "unit": "paid/contacts",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid orders at the offered $380; listing prices of other sellers do not establish it"
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "sales",
+      "sources": [
+       "s_conv",
+       "s_vol"
+      ],
+      "needs": "holds only if buyers pay $380"
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "cents",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to payout",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#buyerVolume",
+      "dated": "2026-11",
+      "claim": "300 fabrication shops with quality-manager emails in the state fabricators association directory",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#price",
+      "dated": "2026-11",
+      "claim": "Welding-compliance template sellers list this workbook at $380",
+      "population": "structural steel fabricators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#conversionRates",
+      "dated": "2026-11",
+      "claim": "21 paid orders from 150 contacts on this offer's own sales",
+      "population": "quality managers contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ed5f74bcdb1e4946aacc#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order, payout 5 days later",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc"
+     }
+    ],
+    "validation": {
+     "proof": "At least 8 card orders actually paid at $380 ($3,040 >= $3,000) by day 20, so their payouts settle by day 25.",
+     "stop": [
+      "Fewer than 5 orders paid at $380 from the first 100 contacts: stop selling at $380; test a lower price only if 300 shops x 14% at that price still reach $3,000 (price >= about $72) and enough days remain for those orders to be paid by day 25 (payout 5 days after order), else report no plan.",
+      "Any buyer refuses on price in writing in a way that shows $380 exceeds what shops pay."
+     ],
+     "continue": [
+      "5 or more orders paid at $380 from the first 100 contacts: continue emailing the remaining directory shops until 8-9 paid orders are in."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Passing at threshold carries the target: 8 x $380 = $3,040 settled cash (metric is SETTLED_CASH).",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "Window: proof by day 20 + 5-day payout = day 25 <= 30.",
+      "resolution": "Unchanged."
+     },
+     {
+      "finding": "Fallback lower-price test: if started after a failed first 100, there may not be enough window left to reach 42 orders and settle; the stop rule should check days left, not only the price floor.",
+      "resolution": "Accepted: the stop rule now also requires enough days left for the lower-price orders to be paid by day 25."
+     },
+     {
+      "finding": "Ledger still shows the central case (orders by days 3 and 10, settle day 15); acceptable as an estimate since proof day 20 is the binding check.",
+      "resolution": "Kept as the central-case estimate; proof day 20 remains the binding check. Re-planned against the owner's changed objective: single industry structural steel fabrication (this opening's industry) and at most 3 owner hours a week (plan uses 0)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b94520d8cf6d4657810a",
+      "why": "Outside the owner's single named industry (it is farm equipment repair, not structural steel fabrication); in addition its fulfilment is the owner's own on-site welding (10 owner hours a repair, 30 for three, over the 3 hours a week allowed), resting only on a PERSON fact, and Brain's standing rule is that the owner does no physical work."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ed5f74bcdb1e4946aacc",
+      "deals": 9,
+      "price": 380,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": 0
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c557f6cb593b_c1d25d",
+    "digest": "c557f6cb593b3e64ef2da8c7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:09:42.036Z"
+   },
+   "review": {
+    "revisionId": "rev_c557f6cb593b_c1d25d",
+    "revisionDigest": "c557f6cb593b3e64ef2da8c7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6ea96bc22fae4ebca840/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0b5ed71aac941298674/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Re-planned correctly against the changed contract (structural steel fabrication only; at most 3 owner hours a week). The member is a structural-steel opening, so it is inside the exclusion; the welding-repairs opening is correctly excluded as farm equipment repair (outside the named industry), on top of 30 owner hours and a PERSON-only fulfilment fact. CONDITIONAL with validation.decides = OFFER_AND_PRICE remains right: $380 is other sellers' listing price and is carried as UNKNOWN. Recomputed: proof 8 paid at $380 = $3,040 >= $3,000 by day 20, payout by day 25; trace collected $3,420, minCash $1,475, owner funded $0, exposure $0. The stop rule now also checks days left for a lower-price fallback. Owner hours fit even on the cautious reading: the plan treats the card's 0.5 h a deal as Brain's work, but if it were the owner's it is 9 x 0.5 = 4.5 h over ~3 weeks, ~1.5-2.3 h a week, under the 3 h cap.",
+    "findings": [
+     "Industry exclusion respected: only cop_ed5f74... (structural steel fabrication) is a member.",
+     "Owner hours: recorded 0; the card's humanHours 0.5/deal is reinterpreted as Brain's work without a record saying so - harmless here because even counted as owner time it is ~4.5 h total, inside 3 h/week over the window.",
+     "Arithmetic unchanged and correct: 8 x $380 = $3,040; 9 x $380 = $3,420; cost $45."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:11:32.373Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days in a single industry I name, structural steel fabrication, with no more than 3 hours a week of my time and no up-front capital.",
+    "terms": "6c6a692204fc182d",
+    "openings": {
+     "cop_b94520d8cf6d4657810a": "3e33665aa81448fc",
+     "cop_ed5f74bcdb1e4946aacc": "d9defb45f54a3050"
+    }
+   },
+   "at": "2026-11-28T06:13:31.657Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

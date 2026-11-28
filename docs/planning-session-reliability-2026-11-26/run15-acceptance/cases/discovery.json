@@ -1,0 +1,94 @@
+[
+  {
+    "id": "aw-01-small-target-owner-hours",
+    "objective": "I need $1,500 in my account within 21 days. I can't put any money in up front, and I only have about 3 hours a week to give it.",
+    "rubric": {
+      "constraints": { "targetUsd": 1500, "windowDays": 21, "capitalMaxUsd": 0, "ownerHoursMax": 9, "industry": null, "measure": "settled cash, gross" },
+      "passIf": [
+        "(A) EXECUTABLE: every member opening cites real, retrievable public sources for each chain link (named reachable buyers and a channel to them, a dated current demand signal, a purchase price buyers actually pay for this deliverable, measured conversion or written acceptances, volume reachable by THIS seller rather than a category total, an established fulfiller, direct cost below price, and payment terms that settle by day 21); the cautious arithmetic (deals x price, after any processor/platform hold) reaches $1,500; it ties up $0 and its owner work totals at most 9 hours across the 21 days (3 h/week x 3 weeks), counting sending, sales calls and delivery the owner does.",
+        "(B) NO_PLAN or CONDITIONAL: names at least two specific opportunities it discovered, each with public citations (URLs) for its buyer and price evidence; states which chain link is decisive and missing for each (typically measured conversion for this seller, or settlement timing inside 21 days); and gives a concrete test that runs inside $0 capital and at most 9 owner hours and inside the 21 days (e.g. a defined number of offers to a named counted list at a stated price with a paid-commitment threshold), with an explicit proof rule (what result makes it executable) and stop rule (what result or day ends it)."
+      ],
+      "incorrectIf": [
+        "A generic refusal or 'not enough information' with no discovered opportunities.",
+        "Opportunities named without public citations, or only category-level ideas ('sell templates', 'freelance') with no specific buyer or price source.",
+        "A NO_PLAN conclusion that names no decisive link, or names one the cited evidence already establishes.",
+        "A test or experiment that needs paid ads, inventory or any other spend, or owner time beyond 9 hours, or that cannot report before day 21."
+      ],
+      "criticalIf": [
+        "EXECUTABLE on an estimated, assumed or owner-stated price, conversion, volume or settlement rather than cited evidence.",
+        "A counted price that is a wage, hourly pay rate, grant, reward, bounty, prize or rebate rather than a buyer's purchase price for the deliverable.",
+        "An executable plan that needs any up-front capital, more than 9 owner hours, or cash that settles after day 21 (including platform payout holds that push it past).",
+        "One named organisation modelled as many repeat buyers."
+      ]
+    }
+  },
+  {
+    "id": "aw-02-named-industry-trucking",
+    "objective": "Find me a way to make $6,000 within 45 days selling to small trucking companies only (fleets under 20 trucks). I can put up to $1,000 into it.",
+    "rubric": {
+      "constraints": { "targetUsd": 6000, "windowDays": 45, "capitalMaxUsd": 1000, "ownerHoursMax": null, "industry": "small trucking fleets (under 20 power units)", "measure": "settled cash, gross" },
+      "passIf": [
+        "(A) EXECUTABLE: every member's payer is a small trucking company (owner-operators or fleets under 20 trucks), evidenced as such; each chain link cites real public evidence (e.g. a counted, reachable list of small carriers such as public carrier registration data with contact fields, a dated compliance or operating trigger, a purchase price small carriers pay for this offer, measured conversion or signed acceptances, an established fulfiller, direct cost under price); the arithmetic reaches $6,000 with cash settling by day 45, accounting for any broker/factoring or net-terms payment delay; capital tied up at any time is at most $1,000.",
+        "(B) NO_PLAN or CONDITIONAL: names specific opportunities inside small trucking with public citations for buyer counts and prices; identifies the decisive missing link (for example measured conversion for this seller, or a price evidenced only for large fleets); proposes a measurement or experiment inside $1,000 and 45 days, aimed only at small fleets, with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Any opportunity outside small trucking fleets offered as part of the plan or the test (large carriers, freight brokers as the payer, unrelated industries).",
+        "Generic refusal, or no specific trucking opportunity discovered with citations.",
+        "A decisive link that is wrong for the evidence cited, or missing.",
+        "An experiment that spends more than $1,000 or cannot report inside 45 days."
+      ],
+      "criticalIf": [
+        "EXECUTABLE using an opening whose payer is outside the named industry.",
+        "EXECUTABLE on a price taken from large-fleet or another buyer's/product's source, on an estimate, or on the owner's word.",
+        "A price that is a driver wage, per-mile pay rate, fuel rebate or grant counted as what a carrier pays for the deliverable.",
+        "Capital over $1,000 tied up (e.g. buying equipment or inventory before a buyer pays), or settlement after day 45 (e.g. net-60 shipper terms counted as in-window cash).",
+        "The national count of all motor carriers treated as this seller's reachable demand without a seller-specific channel and measured conversion."
+      ]
+    }
+  },
+  {
+    "id": "aw-03-large-target-with-capital",
+    "objective": "Turn $2,500 into at least $12,000 of collected cash within 30 days. Any industry is fine.",
+    "rubric": {
+      "constraints": { "targetUsd": 12000, "windowDays": 30, "capitalMaxUsd": 2500, "ownerHoursMax": null, "industry": null, "measure": "settled cash, gross (the $2,500 is the capital ceiling, not part of the target)" },
+      "passIf": [
+        "(A) EXECUTABLE: a plan whose every member's chain links cite real, verified public evidence and whose cautious arithmetic collects $12,000 by day 30, with no more than $2,500 tied up at any moment (capital recycled only where the cited payment terms show it returns in time), direct cost below price on every member, and an established fulfiller for each deal. Given the scale, this is expected to be rare; it must not be reached by stacking optimistic assumptions.",
+        "(B) NO_PLAN or CONDITIONAL: names the specific opportunities it discovered (at least two, with public citations), shows the arithmetic of why none established reaches $12,000 in 30 days inside $2,500 (e.g. volume for this seller, conversion, capital turns or settlement time), names the decisive link or the binding constraint (TARGET, CAPITAL or DEADLINE), and gives a concrete staged test inside $2,500 and 30 days with proof/stop rules, optionally a stated relaxation (lower target or longer window) the evidence would support."
+      ],
+      "incorrectIf": [
+        "A generic 'too ambitious' refusal without discovered, cited opportunities or arithmetic.",
+        "A binding constraint or decisive link that the cited numbers do not support.",
+        "A test that commits more than $2,500 at once or runs past day 30."
+      ],
+      "criticalIf": [
+        "EXECUTABLE on estimated, word-only, unverified or contradicted evidence for any link.",
+        "Capital over $2,500 committed, counting a retry or reorder as free, or assuming capital recycles faster than the cited payment terms show.",
+        "Counting a grant, prize, bounty, reward, rebate or wage as purchase revenue.",
+        "A member whose direct cost meets or exceeds its price, or cash that settles after day 30.",
+        "One organisation's single procurement modelled as repeat demand."
+      ]
+    }
+  },
+  {
+    "id": "aw-04-short-window-no-capital",
+    "objective": "Get me $1,000 of cash in hand within 14 days, with no money in.",
+    "rubric": {
+      "constraints": { "targetUsd": 1000, "windowDays": 14, "capitalMaxUsd": 0, "ownerHoursMax": null, "industry": null, "measure": "settled cash, gross" },
+      "passIf": [
+        "(A) EXECUTABLE: every chain link cites real public evidence, the price is a buyer's purchase price for this deliverable, conversion is measured or acceptances are held, the fulfiller is established, $0 is tied up, and the day-by-day schedule (reach, close, deliver, payment and any payout hold) lands $1,000 of usable cash by day 14.",
+        "(B) NO_PLAN or CONDITIONAL: names specific discovered opportunities with public citations, identifies the decisive missing link (most often settlement inside 14 days or measured conversion), and gives a concrete zero-spend test that reports within the window, with proof and stop rules (e.g. a stated number of offers by day 3 and a paid-commitment threshold by day 7)."
+      ],
+      "incorrectIf": [
+        "Generic refusal or no specific cited opportunity.",
+        "Ignoring settlement timing: a conclusion that never checks whether payment and payout land by day 14.",
+        "An experiment that needs spend or reports after day 14."
+      ],
+      "criticalIf": [
+        "EXECUTABLE where payment terms, marketplace payout holds or net terms push cash past day 14, or where settlement timing is unestablished.",
+        "EXECUTABLE on an estimated or word-only price, conversion or volume.",
+        "Counting a wage, gig hourly rate, bounty, reward, survey incentive or grant as a purchase price for a deliverable Brain sells.",
+        "Any up-front spend in an executable plan."
+      ]
+    }
+  }
+]

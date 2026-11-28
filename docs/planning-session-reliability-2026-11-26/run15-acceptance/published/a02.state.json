@@ -1,0 +1,1412 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_0cea6cd8f1204a52be25",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "2e1f83e7ec0925d8cb15f2bb"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_0cea6cd8f1204a52be25",
+    "contractDigest": "2e1f83e7ec0925d8cb15f2bb",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the $350 route-profitability workbook to vending operators, then scale to 10 orders",
+     "opportunityIds": [
+      "cop_d167c3f6c7cb4da18c3d"
+     ],
+     "why": "Buyers (380 directory operators), channel, demand, conversion (9 paid of 80 on this offer's own sales), Brain fulfilment, $5 cost and 4-day settlement are evidenced. The $350 price is only what the owner says operators would pay (a PERSON fact), so no price buyers pay is established. A first send to 80 contacts at $350 measures it within a week at zero capital; 10 orders at $350 = $3,500 would clear the $3,000 target by about day 20."
+    },
+    "alternatives": [
+     {
+      "title": "Research published prices first",
+      "why": "Brain's revenueRange question is parked; a live offer measures what these exact buyers pay faster and at no cost."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the first 80 operators in the state vending association directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $350 to those 80 and count paid orders by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price_person",
+       "s_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If the test passes, offer at $350 to the remaining directory operators until 10 paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_volume"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each operator's route-profitability workbook from its sales export within one day",
+      "performer": "BRAIN",
+      "costCents": 5000,
+      "day": 2,
+      "dependsOn": "test",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect payment; usable 4 days after order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 105000,
+      "label": "3 test orders at $350",
+      "settlesDay": 7,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Direct cost $5 x 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 245000,
+      "label": "7 further orders at $350",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 3500,
+      "label": "Direct cost $5 x 7",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price operators pay for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "paid orders at $350 from the first 80 contacts"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 350,
+      "unit": "USD",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "the live test"
+     },
+     {
+      "name": "paid conversion on this offer",
+      "status": "EVIDENCED",
+      "value": 0.1125,
+      "unit": "paid orders per contact (9/80), price paid not recorded",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable operators",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "operators",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "deals at $350",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "the price to be established"
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_person",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#price",
+      "dated": "2026-11",
+      "claim": "The owner says route operators would pay $350 — a PERSON statement, not a price buyers are shown to pay.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 80 contacts on this offer's own sales.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#buyerVolume",
+      "dated": "2026-11",
+      "claim": "380 vending operators listed with contact emails; each reprices every quarter.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost per deal.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "4 days to first cash.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 80 directory operators pay $350 for the workbook by day 7 (cash received).",
+     "stop": [
+      "Fewer than 3 paid orders at $350 from 80 contacts by day 7: stop; the price is not established — re-plan at a researched price."
+     ],
+     "continue": [
+      "3 or more paid at $350 by day 7: offer to the remaining 300 operators until 10 paid orders ($3,500) by day 20."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+      "deals": 10,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 20,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_55e672cf62c1_39793c",
+    "digest": "55e672cf62c1525054523cba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_deda06fc90a24ae6a582/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:01.352Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_0cea6cd8f1204a52be25",
+   "contractDigest": "2e1f83e7ec0925d8cb15f2bb",
+   "parentRevisionId": null,
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test-sell the $350 route-profitability workbook to vending operators, then scale to 10 orders",
+    "opportunityIds": [
+     "cop_d167c3f6c7cb4da18c3d"
+    ],
+    "why": "Buyers (380 directory operators), channel, demand, conversion (9 paid of 80 on this offer's own sales), Brain fulfilment, $5 cost and 4-day settlement are evidenced. The $350 price is only what the owner says operators would pay (a PERSON fact), so no price buyers pay is established. A first send to 80 contacts at $350 measures it within a week at zero capital; 10 orders at $350 = $3,500 would clear the $3,000 target by about day 20."
+   },
+   "alternatives": [
+    {
+     "title": "Research published prices first",
+     "why": "Brain's revenueRange question is parked; a live offer measures what these exact buyers pay faster and at no cost."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email the first 80 operators in the state vending association directory",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_volume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Offer the workbook at $350 to those 80 and count paid orders by day 7",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price_person",
+      "s_conv"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "If the test passes, offer at $350 to the remaining directory operators until 10 paid orders",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "test",
+     "evidence": [
+      "s_conv",
+      "s_volume"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Build each operator's route-profitability workbook from its sales export within one day",
+     "performer": "BRAIN",
+     "costCents": 5000,
+     "day": 2,
+     "dependsOn": "test",
+     "evidence": [
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect payment; usable 4 days after order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 105000,
+     "label": "3 test orders at $350",
+     "settlesDay": 7,
+     "stepId": "collect"
+    },
+    {
+     "day": 7,
+     "kind": "FEE",
+     "amountCents": 1500,
+     "label": "Direct cost $5 x 3",
+     "stepId": "deliver"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 245000,
+     "label": "7 further orders at $350",
+     "settlesDay": 20,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 3500,
+     "label": "Direct cost $5 x 7",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price operators pay for the workbook",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_price_person"
+     ],
+     "needs": "paid orders at $350 from the first 80 contacts"
+    },
+    {
+     "name": "offered price",
+     "status": "ASSUMED",
+     "value": 350,
+     "unit": "USD",
+     "sources": [
+      "s_price_person"
+     ],
+     "needs": "the live test"
+    },
+    {
+     "name": "paid conversion on this offer",
+     "status": "EVIDENCED",
+     "value": 0.1125,
+     "unit": "paid orders per contact (9/80), price paid not recorded",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable operators",
+     "status": "EVIDENCED",
+     "value": 380,
+     "unit": "operators",
+     "sources": [
+      "s_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 10,
+     "unit": "deals at $350",
+     "sources": [
+      "s_price_person"
+     ],
+     "needs": "the price to be established"
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price_person",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#price",
+     "dated": "2026-11",
+     "claim": "The owner says route operators would pay $350 — a PERSON statement, not a price buyers are shown to pay.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 paid orders from 80 contacts on this offer's own sales.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    },
+    {
+     "id": "s_volume",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "380 vending operators listed with contact emails; each reprices every quarter.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#directCosts",
+     "dated": "2026-11",
+     "claim": "$5 direct cost per deal.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "4 days to first cash.",
+     "population": "Owner-operators of small vending routes (state vending association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 of the first 80 directory operators pay $350 for the workbook by day 7 (cash received).",
+    "stop": [
+     "Fewer than 3 paid orders at $350 from 80 contacts by day 7: stop; the price is not established — re-plan at a researched price."
+    ],
+    "continue": [
+     "3 or more paid at $350 by day 7: offer to the remaining 300 operators until 10 paid orders ($3,500) by day 20."
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+     "deals": 10,
+     "price": 350,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 20,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_55e672cf62c1_39793c",
+   "digest": "55e672cf62c1525054523cba",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_deda06fc90a24ae6a582/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:59:01.352Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_55e672cf62c1_39793c",
+   "digest": "55e672cf62c1525054523cba",
+   "contractDigest": "2e1f83e7ec0925d8cb15f2bb",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 5000,
+    "committedOpenCents": 0,
+    "preProofCents": 1500,
+    "maxExposureCents": 0,
+    "minCashCents": 103500,
+    "minCashDay": 7,
+    "collectedCents": 350000,
+    "collectedInWindowCents": 350000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 345000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 35880× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Route-profitability audit workbook for vending machine opera\" needs [figure withheld] and keeps [figure withheld], 345× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Owner-operators of small vending routes\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_d167c3f6c7cb4da18c3d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Route-profitability audit workbook for vending machine operators\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Route-profitability audit workbook for vending machine operators\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Owner-operators of small vending routes",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Owner-operators of small vending routes",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 52.83561954796369
+     },
+     {
+      "label": "Collect payment for \"Route-profitability audit workbook for vending machine operators\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+      "title": "Route-profitability audit workbook for vending machine operators",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Owner-operators of small vending routes",
+       "reachableChannel": "Email to the members listed in the state vending association's directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:00.143Z",
+       "offerScope": "A workbook that ranks each machine on a route by margin per service visit from the operator's sales export; Brain builds it within one day.",
+       "priceCents": 35000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "vending machine operators",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the members listed in the state vending association's directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 9 accepted of 80 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "10 deal(s) needed, 380 available in the window (380 reachable buyers, each buying about every 91 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "4 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "380 vending operators are listed with contact emails in the state vending association's member directory; each reprices its machines every quarter.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook that ranks each machine on a route by margin per service visit from the operator's sales export; Brain builds it within one day. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "9 paid orders from 80 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owner-operators of small vending routes",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The owner says route operators would pay $350 for the audit.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "4 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_d21942e36ed24086ab06"
+    ],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:55:03.466Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_55e672cf62c1_39793c",
+    "revisionDigest": "55e672cf62c1525054523cba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_deda06fc90a24ae6a582/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4ca512a47263431ca572/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance. The $350 price is only the owner's word (PERSON fact) and Brain holds OFFER_AND_PRICE as an assumption; the revision says so, marks the price UNKNOWN/ASSUMED, and makes it the one thing the live test decides. Every other link is evidenced on the card (380 directory operators, 9/80 paid conversion on this offer, Brain-proven spreadsheet fulfilment, $5 cost, 4-day settlement, zero capital). The test takes orders only for a deliverable Brain has proven it can produce, and passing it at its threshold carries the target inside the window.",
+    "findings": [
+     "Recomputed target: ceil(3000/350) = 9 deals minimum; plan sells 10 = $3,500 gross, $50 cost, $3,450 net. Ledger matches: 3 x $350 = $1,050 by day 7, 7 x $350 = $2,450 by day 20; deliver step cost 10 x $5 = $50.",
+     "Threshold carries the target: proof = 3 paid of 80 (3.75%). At exactly that rate the remaining 300 operators yield ~11 more, 3 + 11 = 14 >= 9 needed. At the card's 9/80 rate, ~34 more. Second-wave orders from day 8 settle by ~day 19-20, inside 30.",
+     "Stop rule is clean: <3 paid by day 7 stops and re-plans at a researched price; no capital at risk ($15 of direct cost pre-proof, paid from receipts).",
+     "Caveats to carry, not blocking: the 9/80 conversion records no price, so the second wave's rate should be re-measured from the test at $350 rather than assumed; SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and must be connected before day 1; card humanHours 0.5/deal (~5 h for 10) is not on the ledger — no hours ceiling is set so it fits, but should be shown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:01:15.029Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_55e672cf62c1_39793c",
+   "digest": "55e672cf62c1525054523cba",
+   "contractDigest": "2e1f83e7ec0925d8cb15f2bb",
+   "plan": {
+    "goalId": "wst_0cea6cd8f1204a52be25",
+    "contractDigest": "2e1f83e7ec0925d8cb15f2bb",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the $350 route-profitability workbook to vending operators, then scale to 10 orders",
+     "opportunityIds": [
+      "cop_d167c3f6c7cb4da18c3d"
+     ],
+     "why": "Buyers (380 directory operators), channel, demand, conversion (9 paid of 80 on this offer's own sales), Brain fulfilment, $5 cost and 4-day settlement are evidenced. The $350 price is only what the owner says operators would pay (a PERSON fact), so no price buyers pay is established. A first send to 80 contacts at $350 measures it within a week at zero capital; 10 orders at $350 = $3,500 would clear the $3,000 target by about day 20."
+    },
+    "alternatives": [
+     {
+      "title": "Research published prices first",
+      "why": "Brain's revenueRange question is parked; a live offer measures what these exact buyers pay faster and at no cost."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the first 80 operators in the state vending association directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $350 to those 80 and count paid orders by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price_person",
+       "s_conv"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If the test passes, offer at $350 to the remaining directory operators until 10 paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_volume"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each operator's route-profitability workbook from its sales export within one day",
+      "performer": "BRAIN",
+      "costCents": 5000,
+      "day": 2,
+      "dependsOn": "test",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect payment; usable 4 days after order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 105000,
+      "label": "3 test orders at $350",
+      "settlesDay": 7,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Direct cost $5 x 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 245000,
+      "label": "7 further orders at $350",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 3500,
+      "label": "Direct cost $5 x 7",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price operators pay for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "paid orders at $350 from the first 80 contacts"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 350,
+      "unit": "USD",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "the live test"
+     },
+     {
+      "name": "paid conversion on this offer",
+      "status": "EVIDENCED",
+      "value": 0.1125,
+      "unit": "paid orders per contact (9/80), price paid not recorded",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable operators",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "operators",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "deals at $350",
+      "sources": [
+       "s_price_person"
+      ],
+      "needs": "the price to be established"
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_person",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#price",
+      "dated": "2026-11",
+      "claim": "The owner says route operators would pay $350 — a PERSON statement, not a price buyers are shown to pay.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 80 contacts on this offer's own sales.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#buyerVolume",
+      "dated": "2026-11",
+      "claim": "380 vending operators listed with contact emails; each reprices every quarter.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#directCosts",
+      "dated": "2026-11",
+      "claim": "$5 direct cost per deal.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_d167c3f6c7cb4da18c3d#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "4 days to first cash.",
+      "population": "Owner-operators of small vending routes (state vending association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 80 directory operators pay $350 for the workbook by day 7 (cash received).",
+     "stop": [
+      "Fewer than 3 paid orders at $350 from 80 contacts by day 7: stop; the price is not established — re-plan at a researched price."
+     ],
+     "continue": [
+      "3 or more paid at $350 by day 7: offer to the remaining 300 operators until 10 paid orders ($3,500) by day 20."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_d167c3f6c7cb4da18c3d",
+      "deals": 10,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 20,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_55e672cf62c1_39793c",
+    "digest": "55e672cf62c1525054523cba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_deda06fc90a24ae6a582/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:59:01.352Z"
+   },
+   "review": {
+    "revisionId": "rev_55e672cf62c1_39793c",
+    "revisionDigest": "55e672cf62c1525054523cba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_deda06fc90a24ae6a582/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4ca512a47263431ca572/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance. The $350 price is only the owner's word (PERSON fact) and Brain holds OFFER_AND_PRICE as an assumption; the revision says so, marks the price UNKNOWN/ASSUMED, and makes it the one thing the live test decides. Every other link is evidenced on the card (380 directory operators, 9/80 paid conversion on this offer, Brain-proven spreadsheet fulfilment, $5 cost, 4-day settlement, zero capital). The test takes orders only for a deliverable Brain has proven it can produce, and passing it at its threshold carries the target inside the window.",
+    "findings": [
+     "Recomputed target: ceil(3000/350) = 9 deals minimum; plan sells 10 = $3,500 gross, $50 cost, $3,450 net. Ledger matches: 3 x $350 = $1,050 by day 7, 7 x $350 = $2,450 by day 20; deliver step cost 10 x $5 = $50.",
+     "Threshold carries the target: proof = 3 paid of 80 (3.75%). At exactly that rate the remaining 300 operators yield ~11 more, 3 + 11 = 14 >= 9 needed. At the card's 9/80 rate, ~34 more. Second-wave orders from day 8 settle by ~day 19-20, inside 30.",
+     "Stop rule is clean: <3 paid by day 7 stops and re-plans at a researched price; no capital at risk ($15 of direct cost pre-proof, paid from receipts).",
+     "Caveats to carry, not blocking: the 9/80 conversion records no price, so the second wave's rate should be re-measured from the test at $350 rather than assumed; SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and must be connected before day 1; card humanHours 0.5/deal (~5 h for 10) is not on the ledger — no hours ceiling is set so it fits, but should be shown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:01:15.029Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_d167c3f6c7cb4da18c3d": "5429b97fa48357e9"
+    }
+   },
+   "at": "2026-11-28T06:02:10.139Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,2729 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_3d613fbf04ac472c8a1b",
+   "words": "I need $1,500 in my account within 21 days. I can't put any money in up front, and I only have about 3 hours a week to give it.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 150000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$1,500 settled in the owner's account within 21 days",
+    "ownerHoursPerWeek": 3,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "08d88e6fc04bce14e3209dfd"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_3d613fbf04ac472c8a1b",
+    "contractDigest": "08d88e6fc04bce14e3209dfd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: run a $0, 5-day presale test of a $300 four-post blog pack sold by the owner's own email",
+     "opportunityIds": [],
+     "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price blog articles",
+      "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+     },
+     {
+      "title": "Fiverr article gig",
+      "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+     },
+     {
+      "title": "DataAnnotation hourly tasks",
+      "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 40 local small businesses whose website blog has had no post in 6+ months, and drafts a personal email and a Stripe payment link offering 4 posts for $300",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "REACH",
+      "label": "Owner sends the 40 drafted emails from their own mailbox and answers replies",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "TEST",
+      "label": "Count paid Stripe orders and replies on day 6 against the proof and stop thresholds",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t2",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per sale",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business emailed",
+      "sources": [],
+      "needs": "Measured by the presale test"
+     },
+     {
+      "name": "q_settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days, worst-case first Stripe payout",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_owner_hours",
+      "status": "EVIDENCED",
+      "value": 9,
+      "unit": "owner hours in window",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.eesel.ai/blog/blog-writing-rates",
+      "dated": "2026-01-19",
+      "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+      "population": "Freelance blog-writing buyers in general",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s2",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.upwork.com/resources/is-upwork-free",
+      "dated": "2026",
+      "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+      "population": "New Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s4",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+      "dated": "2026",
+      "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_467db7644f1e4d1db134"
+     },
+     {
+      "id": "s5",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026",
+      "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+      "population": "New Stripe accounts (US)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+     },
+     {
+      "id": "s6",
+      "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+      "dated": "2026",
+      "claim": "Projects start at $20 per hour for general work",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+      "dated": "2026",
+      "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+      "population": "DataAnnotation applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+     "resolution": "Run a $0 presale in days 1-6. Brain lists 40 local businesses with dormant blogs and drafts the emails; the owner sends them (2 h) with a $300 Stripe link for 4 posts. Proof: at least 2 paid orders by day 6, which establishes the price and puts first payout by day 13-20. Continue: email 40 more and fulfil through a per-article freelance writer, paid from the receipts. Stop: 0 paid orders and fewer than 3 interested replies by day 6. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, and propose a longer window.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8f8ce70b5c17_7238d1",
+    "digest": "8f8ce70b5c17430b6380054d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:10:37.542Z"
+   },
+   {
+    "goalId": "wst_3d613fbf04ac472c8a1b",
+    "contractDigest": "08d88e6fc04bce14e3209dfd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: run a $0, 5-day presale test of a $300 four-post blog pack sold by the owner's own email",
+     "opportunityIds": [],
+     "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price blog articles",
+      "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+     },
+     {
+      "title": "Fiverr article gig",
+      "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+     },
+     {
+      "title": "DataAnnotation hourly tasks",
+      "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 40 local small businesses whose website blog has had no post in 6+ months, and drafts a personal email and a Stripe payment link offering 4 posts for $300",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "REACH",
+      "label": "Owner sends the 40 drafted emails from their own mailbox and answers replies",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "t1",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "TEST",
+      "label": "Count paid Stripe orders and replies on day 6 against the proof and stop thresholds",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t2",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per sale",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business emailed",
+      "sources": [],
+      "needs": "Measured by the presale test"
+     },
+     {
+      "name": "q_settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days, worst-case first Stripe payout",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_owner_hours",
+      "status": "EVIDENCED",
+      "value": 9,
+      "unit": "owner hours in window",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.eesel.ai/blog/blog-writing-rates",
+      "dated": "2026-01-19",
+      "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+      "population": "Freelance blog-writing buyers in general",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s2",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.upwork.com/resources/is-upwork-free",
+      "dated": "2026",
+      "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+      "population": "New Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s4",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+      "dated": "2026",
+      "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_467db7644f1e4d1db134"
+     },
+     {
+      "id": "s5",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026",
+      "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+      "population": "New Stripe accounts (US)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+     },
+     {
+      "id": "s6",
+      "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+      "dated": "2026",
+      "claim": "Projects start at $20 per hour for general work",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+      "dated": "2026",
+      "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+      "population": "DataAnnotation applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+     "resolution": "Run a $0 presale in days 1-6. Brain lists 40 local businesses with dormant blogs and drafts the emails; the owner sends them (2 h) with a $300 Stripe link for 4 posts. Proof: at least 2 paid orders by day 6, which establishes the price and puts first payout by day 13-20. Continue: email 40 more and fulfil through a per-article freelance writer, paid from the receipts. Stop: 0 paid orders and fewer than 3 interested replies by day 6. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, and propose a longer window.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8f8ce70b5c17_d6b3be",
+    "digest": "8f8ce70b5c17430b6380054d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:10:41.688Z"
+   },
+   {
+    "goalId": "wst_3d613fbf04ac472c8a1b",
+    "contractDigest": "08d88e6fc04bce14e3209dfd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: run a $0, 5-day presale test of a $300 four-post blog pack sold by the owner's own email",
+     "opportunityIds": [],
+     "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price blog articles",
+      "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+     },
+     {
+      "title": "Fiverr article gig",
+      "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+     },
+     {
+      "title": "DataAnnotation hourly tasks",
+      "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 40 local small businesses whose website blog has had no post in 6+ months, and drafts a personal email and a Stripe payment link offering 4 posts for $300",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "f1",
+      "kind": "TEST",
+      "label": "Before any order is taken, owner messages 3 shortlisted freelance blog writers (Brain shortlists them) and gets a written per-post quote of $40 or less, with 4 posts deliverable within 5 days of an order and payment due on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_writer_capacity"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "REACH",
+      "label": "Owner sends the 40 drafted emails from their own mailbox and answers replies",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "f1",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "TEST",
+      "label": "Count paid Stripe orders and replies on day 6 against the proof and stop thresholds",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t2",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per sale",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business emailed",
+      "sources": [],
+      "needs": "Measured by the presale test"
+     },
+     {
+      "name": "q_settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days, worst-case first Stripe payout",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_writer_capacity",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "posts a confirmed writer delivers within 5 days at <= $40/post",
+      "sources": [],
+      "needs": "Measured by the fulfilment check in step f1"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.eesel.ai/blog/blog-writing-rates",
+      "dated": "2026-01-19",
+      "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+      "population": "Freelance blog-writing buyers in general",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s2",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.upwork.com/resources/is-upwork-free",
+      "dated": "2026",
+      "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+      "population": "New Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s4",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+      "dated": "2026",
+      "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_467db7644f1e4d1db134"
+     },
+     {
+      "id": "s5",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026",
+      "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+      "population": "New Stripe accounts (US)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+     },
+     {
+      "id": "s6",
+      "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+      "dated": "2026",
+      "claim": "Projects start at $20 per hour for general work",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+      "dated": "2026",
+      "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+      "population": "DataAnnotation applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+     "resolution": "Run a $0 presale in days 1-6. Brain lists 40 local businesses with dormant blogs and drafts the emails; the owner sends them (2 h) with a $300 Stripe link for 4 posts. Before any order is taken, the owner gets a writer's written quote of $40/post or less for delivery within 5 days (0.5 h); without one, stop. Proof: at least 2 paid orders by day 6, which establishes the price and puts first payout by day 13-20. Continue: email 40 more and fulfil through a per-article freelance writer, paid from the receipts. Stop: 0 paid orders and fewer than 3 interested replies by day 6. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, and propose a longer window.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "deals": 5,
+      "price": 300,
+      "directCost": 160,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 7.5
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "deals": 10,
+      "price": 150,
+      "directCost": 60,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 10
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "deals": 15,
+      "price": 100,
+      "directCost": 45,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 7.5
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "deals": 75,
+      "price": 20,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 75
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b228ddbee2a7_52f85f",
+    "digest": "b228ddbee2a7f4bc28cd63de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:11:00.197Z"
+   },
+   {
+    "goalId": "wst_3d613fbf04ac472c8a1b",
+    "contractDigest": "08d88e6fc04bce14e3209dfd",
+    "parentRevisionId": "rev_b228ddbee2a7_52f85f",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: run a $0 one-batch presale (100 emails, orders close day 7) of a $300 four-post blog pack",
+     "opportunityIds": [],
+     "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price blog articles",
+      "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+     },
+     {
+      "title": "Fiverr article gig",
+      "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+     },
+     {
+      "title": "DataAnnotation hourly tasks",
+      "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 100 local small businesses whose website blog has had no post in 6+ months, and drafts 100 short personal emails and a Stripe payment link offering 4 posts for $300",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "f1",
+      "kind": "TEST",
+      "label": "Fulfilment check before any order: owner messages 3 freelance blog writers that Brain shortlisted. Stop unless one confirms in writing $40 or less per post, 4 posts delivered within 5 days of an order, and payment within 2 days after the owner's Stripe payout (no money advanced).",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_writer_capacity"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "REACH",
+      "label": "Owner sends all 100 drafted emails in one batch from their own mailbox. No outreach after day 2.",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "f1",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "TEST",
+      "label": "Day 7 is the last order day: count paid Stripe orders against the proof and stop thresholds",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "t2",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per sale",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business emailed",
+      "sources": [],
+      "needs": "Measured by the presale test"
+     },
+     {
+      "name": "q_settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days, worst-case first Stripe payout",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_writer_capacity",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "posts a confirmed writer delivers within 5 days at <= $40/post",
+      "sources": [],
+      "needs": "Measured by the fulfilment check in step f1"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.eesel.ai/blog/blog-writing-rates",
+      "dated": "2026-01-19",
+      "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+      "population": "Freelance blog-writing buyers in general",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s2",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.upwork.com/resources/is-upwork-free",
+      "dated": "2026",
+      "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+      "population": "New Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s4",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+      "dated": "2026",
+      "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_467db7644f1e4d1db134"
+     },
+     {
+      "id": "s5",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026",
+      "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+      "population": "New Stripe accounts (US)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+     },
+     {
+      "id": "s6",
+      "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+      "dated": "2026",
+      "claim": "Projects start at $20 per hour for general work",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+      "dated": "2026",
+      "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+      "population": "DataAnnotation applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+     "resolution": "Run a $0 presale with orders closing on day 7, inside 9 owner hours. Day 1: the owner gets a writer's written terms (0.5 h): $40/post or less, 4 posts within 5 days of an order, paid within 2 days after the owner's Stripe payout, so nothing is advanced against the $0 cap. With no such writer, stop. Day 2: the owner sends 100 Brain-drafted emails in one batch (2.5 h), offering 4 posts for $300 by Stripe link. Proof: at least 5 paid orders by day 7 (5%). That establishes price, demand and conversion, and carries $1,500 gross (5 x $300). The first Stripe payout comes 7-14 days after the first payment, so by day 21 at worst. Each order then takes about 1 h of owner handling (5 h), for 8 h in total. There is no continue-outreach branch, because orders after day 7 may not settle by day 21. Stop: fewer than 5 paid orders by day 7. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, deliver the orders already taken, and propose a longer window. If 'in my account' means net of the writer's $160 a pack, 11 orders would be needed, which no 9-hour test reaches; that also calls for a longer window",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic: 2/40 then 40 more gives ~4 orders = $1,200, short of $1,500.",
+      "resolution": "Accepted. The test is now one batch of 100 emails with a proof of at least 5 paid orders by day 7 (5 x $300 = $1,500), so passing the proof carries the target."
+     },
+     {
+      "finding": "Cash/exposure: writer paid on delivery before the first Stripe payout means capital is advanced against the $0 cap.",
+      "resolution": "Accepted. The fulfilment check now requires the writer's written agreement to be paid within 2 days after the owner's Stripe payout, and stops if no writer agrees, so nothing is advanced."
+     },
+     {
+      "finding": "Owner hours: ~12 h against 9 h.",
+      "resolution": "Accepted. The second outreach batch is removed. Owner time is now 0.5 h for writer terms, 2.5 h for 100 emails and about 1 h of handling for each of 5 orders: 8 h, within 9 h."
+     },
+     {
+      "finding": "Settlement: the continue branch needs a last-order day.",
+      "resolution": "Accepted. Day 7 is the last order day, so the first Stripe payout (7-14 days after the first payment) settles by day 21 at the latest. There is no outreach after day 2."
+     },
+     {
+      "finding": "FULFILMENT (writer quote) is also resolved by the test and should stay in the proof.",
+      "resolution": "Accepted. FULFILMENT stays in resolves, and the writer's terms are a precondition of the test (step f1)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "deals": 5,
+      "price": 300,
+      "directCost": 160,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 8
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "deals": 10,
+      "price": 150,
+      "directCost": 60,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 10
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "deals": 15,
+      "price": 100,
+      "directCost": 45,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 7.5
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "deals": 75,
+      "price": 20,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 75
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2360f925312d_1e4575",
+    "digest": "2360f925312d1ecdc71b3cf2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:22:58.092Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_3d613fbf04ac472c8a1b",
+   "contractDigest": "08d88e6fc04bce14e3209dfd",
+   "parentRevisionId": "rev_b228ddbee2a7_52f85f",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: run a $0 one-batch presale (100 emails, orders close day 7) of a $300 four-post blog pack",
+    "opportunityIds": [],
+    "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+   },
+   "alternatives": [
+    {
+     "title": "Upwork fixed-price blog articles",
+     "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+    },
+    {
+     "title": "Fiverr article gig",
+     "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+    },
+    {
+     "title": "DataAnnotation hourly tasks",
+     "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "RESEARCH",
+     "label": "Brain builds a list of 100 local small businesses whose website blog has had no post in 6+ months, and drafts 100 short personal emails and a Stripe payment link offering 4 posts for $300",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_conversion"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "f1",
+     "kind": "TEST",
+     "label": "Fulfilment check before any order: owner messages 3 freelance blog writers that Brain shortlisted. Stop unless one confirms in writing $40 or less per post, 4 posts delivered within 5 days of an order, and payment within 2 days after the owner's Stripe payout (no money advanced).",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_writer_capacity"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "REACH",
+     "label": "Owner sends all 100 drafted emails in one batch from their own mailbox. No outreach after day 2.",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "f1",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 2.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Day 7 is the last order day: count paid Stripe orders against the proof and stop thresholds",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "t2",
+     "evidence": [
+      "q_conversion",
+      "q_price"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "q_price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per sale",
+     "sources": [
+      "s1",
+      "s4"
+     ],
+     "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+    },
+    {
+     "name": "q_conversion",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per business emailed",
+     "sources": [],
+     "needs": "Measured by the presale test"
+    },
+    {
+     "name": "q_settlement",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days, worst-case first Stripe payout",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "q_writer_capacity",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "posts a confirmed writer delivers within 5 days at <= $40/post",
+     "sources": [],
+     "needs": "Measured by the fulfilment check in step f1"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.eesel.ai/blog/blog-writing-rates",
+     "dated": "2026-01-19",
+     "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+     "population": "Freelance blog-writing buyers in general",
+     "matchesBuyer": false,
+     "opportunityId": "cop_bf8ba8a7420b49209f05"
+    },
+    {
+     "id": "s2",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026",
+     "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+     "population": "Upwork freelancers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_bf8ba8a7420b49209f05"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.upwork.com/resources/is-upwork-free",
+     "dated": "2026",
+     "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+     "population": "New Upwork freelancers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_bf8ba8a7420b49209f05"
+    },
+    {
+     "id": "s4",
+     "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+     "dated": "2026",
+     "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+     "population": "Fiverr sellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_467db7644f1e4d1db134"
+    },
+    {
+     "id": "s5",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026",
+     "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+     "population": "New Stripe accounts (US)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+    },
+    {
+     "id": "s6",
+     "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+     "dated": "2026",
+     "claim": "Projects start at $20 per hour for general work",
+     "population": "DataAnnotation workers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7f7ce1a008a040ed94cd"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+     "dated": "2026",
+     "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+     "population": "DataAnnotation applicants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7f7ce1a008a040ed94cd"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+    "resolution": "Run a $0 presale with orders closing on day 7, inside 9 owner hours. Day 1: the owner gets a writer's written terms (0.5 h): $40/post or less, 4 posts within 5 days of an order, paid within 2 days after the owner's Stripe payout, so nothing is advanced against the $0 cap. With no such writer, stop. Day 2: the owner sends 100 Brain-drafted emails in one batch (2.5 h), offering 4 posts for $300 by Stripe link. Proof: at least 5 paid orders by day 7 (5%). That establishes price, demand and conversion, and carries $1,500 gross (5 x $300). The first Stripe payout comes 7-14 days after the first payment, so by day 21 at worst. Each order then takes about 1 h of owner handling (5 h), for 8 h in total. There is no continue-outreach branch, because orders after day 7 may not settle by day 21. Stop: fewer than 5 paid orders by day 7. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, deliver the orders already taken, and propose a longer window. If 'in my account' means net of the writer's $160 a pack, 11 orders would be needed, which no 9-hour test reaches; that also calls for a longer window",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic: 2/40 then 40 more gives ~4 orders = $1,200, short of $1,500.",
+     "resolution": "Accepted. The test is now one batch of 100 emails with a proof of at least 5 paid orders by day 7 (5 x $300 = $1,500), so passing the proof carries the target."
+    },
+    {
+     "finding": "Cash/exposure: writer paid on delivery before the first Stripe payout means capital is advanced against the $0 cap.",
+     "resolution": "Accepted. The fulfilment check now requires the writer's written agreement to be paid within 2 days after the owner's Stripe payout, and stops if no writer agrees, so nothing is advanced."
+    },
+    {
+     "finding": "Owner hours: ~12 h against 9 h.",
+     "resolution": "Accepted. The second outreach batch is removed. Owner time is now 0.5 h for writer terms, 2.5 h for 100 emails and about 1 h of handling for each of 5 orders: 8 h, within 9 h."
+    },
+    {
+     "finding": "Settlement: the continue branch needs a last-order day.",
+     "resolution": "Accepted. Day 7 is the last order day, so the first Stripe payout (7-14 days after the first payment) settles by day 21 at the latest. There is no outreach after day 2."
+    },
+    {
+     "finding": "FULFILMENT (writer quote) is also resolved by the test and should stay in the proof.",
+     "resolution": "Accepted. FULFILMENT stays in resolves, and the writer's terms are a precondition of the test (step f1)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_bf8ba8a7420b49209f05",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_467db7644f1e4d1db134",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_7f7ce1a008a040ed94cd",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+     "deals": 5,
+     "price": 300,
+     "directCost": 160,
+     "capital": 0,
+     "settlesDay": null,
+     "ownerHours": 8
+    },
+    {
+     "opportunityId": "cop_bf8ba8a7420b49209f05",
+     "deals": 10,
+     "price": 150,
+     "directCost": 60,
+     "capital": 0,
+     "settlesDay": null,
+     "ownerHours": 10
+    },
+    {
+     "opportunityId": "cop_467db7644f1e4d1db134",
+     "deals": 15,
+     "price": 100,
+     "directCost": 45,
+     "capital": 0,
+     "settlesDay": null,
+     "ownerHours": 7.5
+    },
+    {
+     "opportunityId": "cop_7f7ce1a008a040ed94cd",
+     "deals": 75,
+     "price": 20,
+     "directCost": 0,
+     "capital": 0,
+     "settlesDay": null,
+     "ownerHours": 75
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_2360f925312d_1e4575",
+   "digest": "2360f925312d1ecdc71b3cf2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_508b9d294b864b04bf54/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:22:58.092Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_2360f925312d_1e4575",
+   "digest": "2360f925312d1ecdc71b3cf2",
+   "contractDigest": "08d88e6fc04bce14e3209dfd",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Paid AI-training tasks on DataAnnotation (owner's own hours)\", \"Direct-sold AI-drafted blog content package to local busines\", \"Upwork fixed-price AI-assisted blog articles for small busin\", \"Fiverr AI-assisted article-writing gig\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 80× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Direct-sold AI-drafted blog content package to local busines\" needs [figure withheld] and keeps [figure withheld], 140× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_7f7ce1a008a040ed94cd",
+     "cop_fad4e9c12fbf49fdbb60",
+     "cop_bf8ba8a7420b49209f05",
+     "cop_467db7644f1e4d1db134"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dives on \"Paid AI-training tasks on DataAnnotation (owner's own hours)\", \"Direct-sold AI-drafted blog content package to local busines\", \"Upwork fixed-price AI-assisted blog articles for small busin\", \"Fiverr AI-assisted article-writing gig\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "title": "Direct-sold AI-drafted blog content package to local businesses, paid by Stripe link",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 300,
+      "card": {
+       "payer": "Local small businesses without an active blog",
+       "reachableChannel": "Owner's own email to local businesses (free Gmail), Stripe payment link",
+       "offerScope": "Pack of 4 SEO blog posts drafted by Brain, $300",
+       "priceCents": 30000,
+       "currency": "USD",
+       "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+       "peakFundingCents": 0,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "content marketing",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner's own email to local businesses (free Gmail), Stripe payment link"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 160, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner's own email to local businesses (free Gmail), Stripe payment link",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Pack of 4 SEO blog posts drafted by Brain, $300 to Local small businesses without an active blog, reached through Owner's own email to local businesses (free Gmail), Stripe payment link, at $300; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$160",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Pack of 4 SEO blog posts drafted by Brain, $300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Local small businesses without an active blog",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.upwork.com/resources/freelance-writing-rates; local business blog content; https://docs.stripe.com/payouts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "title": "Upwork fixed-price AI-assisted blog articles for small businesses",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 150,
+      "card": {
+       "payer": "Small-business clients posting blog-writing jobs on Upwork",
+       "reachableChannel": "Upwork job feed proposals (owner submits)",
+       "offerScope": "1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers",
+       "priceCents": 15000,
+       "currency": "USD",
+       "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "content marketing",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Upwork job feed proposals (owner submits)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 60, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Upwork job feed proposals (owner submits)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell 1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers to Small-business clients posting blog-writing jobs on Upwork, reached through Upwork job feed proposals (owner submits), at $150; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$60",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "1,000-1,500-word SEO blog article drafted by Brain, owner reviews and delivers",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Small-business clients posting blog-writing jobs on Upwork",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.upwork.com/hire/blog-writers/cost/; https://www.upwork.com/resources/freelance-writing-rates; https://www.upwork.com/resources/is-upwork-free; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "title": "Fiverr AI-assisted article-writing gig",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 100,
+      "card": {
+       "payer": "Fiverr buyers ordering article gigs",
+       "reachableChannel": "Fiverr gig listing (inbound search)",
+       "offerScope": "Fixed-scope blog article gig fulfilled by Brain",
+       "priceCents": 10000,
+       "currency": "USD",
+       "fulfillmentOwner": "A freelance blog writer hired per article (Upwork rates $15-35/h median)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "content marketing",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Fiverr gig listing (inbound search)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 100 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 45, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "20 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Fiverr gig listing (inbound search)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-scope blog article gig fulfilled by Brain to Fiverr buyers ordering article gigs, reached through Fiverr gig listing (inbound search), at $100; A freelance blog writer hired per article (Upwork rates $15-35/h median) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$45",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A freelance blog writer hired per article (Upwork rates $15-35/h median).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-scope blog article gig fulfilled by Brain",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Fiverr buyers ordering article gigs",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid; Fiverr article writing gig; https://help.fiverr.com/hc/en-us/articles/9234443621137-Your-Earnings-page",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "20 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "title": "Paid AI-training tasks on DataAnnotation (owner's own hours)",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "DataAnnotation (AI training platform)",
+       "reachableChannel": "DataAnnotation application and project dashboard",
+       "offerScope": "Owner's hourly AI-training/annotation work",
+       "priceCents": 2000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "AI data annotation",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: DataAnnotation application and project dashboard"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 20 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "DataAnnotation application and project dashboard",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1 DataAnnotation (AI training platform) (One platform; pay per hour of owner work; 9 owner hours in window)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Owner's hourly AI-training/annotation work to DataAnnotation (AI training platform), reached through DataAnnotation application and project dashboard, at $20; Owner delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Owner's hourly AI-training/annotation work",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "DataAnnotation (AI training platform)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$20",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$20",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://dataannotation.tech/blog/does-data-annotation-pay-well; https://www.secondtalent.com/resources/is-dataannotation-legit/; owner hours ceiling 9",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 150000,
+     "daysLeft": 21,
+     "hoursCeiling": 9,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 3
+    },
+    "at": "2026-11-28T06:09:44.011Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b228ddbee2a7_52f85f",
+    "revisionDigest": "b228ddbee2a7f4bc28cd63de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_14e657c4d84a4e9c9531/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The no-plan finding is right on the evidence: none of the four openings has a price buyers are shown to pay (the only blog figure is the eesel rate-guide estimate, which I verified fails scope), no buying signal and no close rate; the marketplace clearance holds (Fiverr 14 days, Upwork 5 days, Stripe first payout 7-14 days) are sourced; DataAnnotation cannot reach $1,500 in 9 owner hours ($20-$50/h x 9 h = $180-$450). Nothing is misstated as a constraint. But the presale it recommends does not carry the target when it passes at its threshold, and it breaks two limits. (1) Proof = 2 paid of 40 (5%); 'continue: email 40 more' gives 80 contacts, i.e. ~4 orders x $300 = $1,200 < $1,500. Five orders are needed, so at 5% the plan needs ~100 contacts, or a proof of >= 3 of 40 with 40 more. (2) No money in: the writer is paid on delivery (within 5 days of an order, ~day 7-11) but Stripe's first payout lands 7-14 days after the first payment (day 13-20), so $160 a pack must be advanced before any receipt is in the account - exposure above the $0 cap. The writer's terms must be payment after the Stripe payout, or the fulfilment check must require it. (3) Owner hours: 3 h/week x 3 weeks = 9 h. Outreach 2 h + quotes 0.5 h + a second 40 emails ~2 h + 1.5 h per sale x 5 = 7.5 h comes to ~12 h, over the 9 h allowed; the test plan should fit the hours or say it cannot.",
+    "findings": [
+     "Arithmetic: $1,500 / $300 = 5 orders; 2/40 x 80 contacts = 4 orders = $1,200 - passing the test at its threshold falls short.",
+     "Cash/exposure: writer due on delivery (~day 7-11) before the first Stripe payout (day 13-20) means owner capital is advanced, against exposureCap $0.",
+     "Owner hours: ~12 h needed against 9 h available; card's 1.5 h per sale for 5 sales alone uses 7.5 h.",
+     "Settlement: orders after ~day 12 may not settle by day 21 if paid out on the initial 7-14 day schedule; the continue branch needs a last-order day.",
+     "Decisive links named (OFFER_AND_PRICE, CONVERSION, CURRENT_DEMAND) are right; FULFILMENT (writer quote) is also resolved by the test and should stay in the proof."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:11:56.697Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_2360f925312d_1e4575",
+    "revisionDigest": "2360f925312d1ecdc71b3cf2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_14e657c4d84a4e9c9531/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN remains right and its recommended test now works inside every limit. Recomputed: proof 5 paid of 100 by day 7 = 5 x $300 = $1,500 settled (metric SETTLED_CASH), so passing at threshold carries the target. Settlement: first Stripe payout 7-14 days after the first payment (~day 2-7) lands by day 21 at worst; no orders are taken after day 7, so nothing is counted that could settle late. Exposure: the writer is paid within 2 days after the Stripe payout under written terms secured before any order, so $0 is advanced against the $0 cap, and fulfilment is shown possible before buyers pay. Owner hours: 0.5 + 2.5 + 5 x 1 = 8 h <= 9 h (3 h/week x 3). Decisive links OFFER_AND_PRICE, CONVERSION, CURRENT_DEMAND are correct; no missing evidence is dressed as a constraint; the alternatives are rejected on their own records (clearance holds, Connects purchase, 9 h x $20-$50 < $1,500).",
+    "findings": [
+     "Gross vs net: at the threshold the account holds $1,500 on settlement but $700 after the writers' $800 is paid (within 2 days of payout, possibly day 22-23). The revision states this and that net would need 11 orders; the owner should be told plainly that 'in my account' is met only gross.",
+     "A 5% paid-order rate from one cold batch is a high bar; the stop is correct, but the owner should expect the likely outcome to be the stop branch and a longer window.",
+     "Writer delivery within 5 days of an order placed by day 7 completes by day 12, well before the day-21 payout bound."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:23:57.737Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_2360f925312d_1e4575",
+   "digest": "2360f925312d1ecdc71b3cf2",
+   "contractDigest": "08d88e6fc04bce14e3209dfd",
+   "plan": {
+    "goalId": "wst_3d613fbf04ac472c8a1b",
+    "contractDigest": "08d88e6fc04bce14e3209dfd",
+    "parentRevisionId": "rev_b228ddbee2a7_52f85f",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: run a $0 one-batch presale (100 emails, orders close day 7) of a $300 four-post blog pack",
+     "opportunityIds": [],
+     "why": "None of the four discovered openings has a price that buyers are shown to pay, a buying signal, or a measured close rate. Settlement also limits the window: Fiverr holds new sellers' earnings for 14 days after an order completes, Upwork holds fixed-price funds for 5 days and may make a new freelancer buy Connects before proposing (the owner has $0 up front), and Stripe's first payout comes 7-14 days after the first payment. DataAnnotation pays for the owner's own hours, and 9 hours at the $20/h floor it advertises cannot reach $1,500. With 9 owner hours and no capital, the only test that fits is a direct presale whose result decides price, demand and conversion together."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price blog articles",
+      "why": "Price is unestablished: the only per-article figure is a rate-guide estimate ($150-$500). A new freelancer may have to buy Connects before proposing, which conflicts with $0 up front. Funds clear 5 days after approval, and the win rate of a profile with no reviews is unknown."
+     },
+     {
+      "title": "Fiverr article gig",
+      "why": "Earnings clear 14 days after an order completes, so orders must finish by about day 7. Inbound orders to a new gig with no reviews are unmeasured."
+     },
+     {
+      "title": "DataAnnotation hourly tasks",
+      "why": "The owner does the work. At the advertised $20/h floor, 9 hours is about $180. Acceptance is not guaranteed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 100 local small businesses whose website blog has had no post in 6+ months, and drafts 100 short personal emails and a Stripe payment link offering 4 posts for $300",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "f1",
+      "kind": "TEST",
+      "label": "Fulfilment check before any order: owner messages 3 freelance blog writers that Brain shortlisted. Stop unless one confirms in writing $40 or less per post, 4 posts delivered within 5 days of an order, and payment within 2 days after the owner's Stripe payout (no money advanced).",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_writer_capacity"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "REACH",
+      "label": "Owner sends all 100 drafted emails in one batch from their own mailbox. No outreach after day 2.",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "f1",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "TEST",
+      "label": "Day 7 is the last order day: count paid Stripe orders against the proof and stop thresholds",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "t2",
+      "evidence": [
+       "q_conversion",
+       "q_price"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per sale",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": "A price a buyer actually pays: no source shows buyers paying for this offer, and the only per-article figure is an estimate"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business emailed",
+      "sources": [],
+      "needs": "Measured by the presale test"
+     },
+     {
+      "name": "q_settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days, worst-case first Stripe payout",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_writer_capacity",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "posts a confirmed writer delivers within 5 days at <= $40/post",
+      "sources": [],
+      "needs": "Measured by the fulfilment check in step f1"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.eesel.ai/blog/blog-writing-rates",
+      "dated": "2026-01-19",
+      "claim": "A 1,000-1,500 word post from an intermediate writer will likely cost between $150 and $500. This is an author's estimate, not a transaction price.",
+      "population": "Freelance blog-writing buyers in general",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s2",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price funds pass through a five-day security hold before they can be withdrawn",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.upwork.com/resources/is-upwork-free",
+      "dated": "2026",
+      "claim": "Upwork Connects cost $0.15 each, and some new freelancers must make a qualifying Connects purchase before they can submit proposals",
+      "population": "New Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bf8ba8a7420b49209f05"
+     },
+     {
+      "id": "s4",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010530058-Getting-Paid",
+      "dated": "2026",
+      "claim": "Earnings can be withdrawn 14 days after an order is marked complete, with shorter periods only for Top Rated or Pro sellers",
+      "population": "Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_467db7644f1e4d1db134"
+     },
+     {
+      "id": "s5",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026",
+      "claim": "Stripe typically schedules the initial payout 7-14 days after the first successful payment",
+      "population": "New Stripe accounts (US)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60"
+     },
+     {
+      "id": "s6",
+      "url": "https://dataannotation.tech/blog/does-data-annotation-pay-well",
+      "dated": "2026",
+      "claim": "Projects start at $20 per hour for general work",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.secondtalent.com/resources/is-dataannotation-legit/",
+      "dated": "2026",
+      "claim": "The company's acceptance rate is reported at 2.6% and hours are not guaranteed",
+      "population": "DataAnnotation applicants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7f7ce1a008a040ed94cd"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No opening has a price that buyers are shown to pay, or a measured close rate, for any offer the owner can sell with $0 and 9 hours that also settles by day 21. Marketplace routes add clearance holds of 5-14 days and a possible Connects purchase.",
+     "resolution": "Run a $0 presale with orders closing on day 7, inside 9 owner hours. Day 1: the owner gets a writer's written terms (0.5 h): $40/post or less, 4 posts within 5 days of an order, paid within 2 days after the owner's Stripe payout, so nothing is advanced against the $0 cap. With no such writer, stop. Day 2: the owner sends 100 Brain-drafted emails in one batch (2.5 h), offering 4 posts for $300 by Stripe link. Proof: at least 5 paid orders by day 7 (5%). That establishes price, demand and conversion, and carries $1,500 gross (5 x $300). The first Stripe payout comes 7-14 days after the first payment, so by day 21 at worst. Each order then takes about 1 h of owner handling (5 h), for 8 h in total. There is no continue-outreach branch, because orders after day 7 may not settle by day 21. Stop: fewer than 5 paid orders by day 7. Then report that $1,500 in 21 days is not reachable with $0 and 9 hours, deliver the orders already taken, and propose a longer window. If 'in my account' means net of the writer's $160 a pack, 11 orders would be needed, which no 9-hour test reaches; that also calls for a longer window",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic: 2/40 then 40 more gives ~4 orders = $1,200, short of $1,500.",
+      "resolution": "Accepted. The test is now one batch of 100 emails with a proof of at least 5 paid orders by day 7 (5 x $300 = $1,500), so passing the proof carries the target."
+     },
+     {
+      "finding": "Cash/exposure: writer paid on delivery before the first Stripe payout means capital is advanced against the $0 cap.",
+      "resolution": "Accepted. The fulfilment check now requires the writer's written agreement to be paid within 2 days after the owner's Stripe payout, and stops if no writer agrees, so nothing is advanced."
+     },
+     {
+      "finding": "Owner hours: ~12 h against 9 h.",
+      "resolution": "Accepted. The second outreach batch is removed. Owner time is now 0.5 h for writer terms, 2.5 h for 100 emails and about 1 h of handling for each of 5 orders: 8 h, within 9 h."
+     },
+     {
+      "finding": "Settlement: the continue branch needs a last-order day.",
+      "resolution": "Accepted. Day 7 is the last order day, so the first Stripe payout (7-14 days after the first payment) settles by day 21 at the latest. There is no outreach after day 2."
+     },
+     {
+      "finding": "FULFILMENT (writer quote) is also resolved by the test and should stay in the proof.",
+      "resolution": "Accepted. FULFILMENT stays in resolves, and the writer's terms are a precondition of the test (step f1)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_fad4e9c12fbf49fdbb60",
+      "deals": 5,
+      "price": 300,
+      "directCost": 160,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 8
+     },
+     {
+      "opportunityId": "cop_bf8ba8a7420b49209f05",
+      "deals": 10,
+      "price": 150,
+      "directCost": 60,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 10
+     },
+     {
+      "opportunityId": "cop_467db7644f1e4d1db134",
+      "deals": 15,
+      "price": 100,
+      "directCost": 45,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 7.5
+     },
+     {
+      "opportunityId": "cop_7f7ce1a008a040ed94cd",
+      "deals": 75,
+      "price": 20,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 75
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2360f925312d_1e4575",
+    "digest": "2360f925312d1ecdc71b3cf2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:22:58.092Z"
+   },
+   "review": {
+    "revisionId": "rev_2360f925312d_1e4575",
+    "revisionDigest": "2360f925312d1ecdc71b3cf2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_508b9d294b864b04bf54/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_14e657c4d84a4e9c9531/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN remains right and its recommended test now works inside every limit. Recomputed: proof 5 paid of 100 by day 7 = 5 x $300 = $1,500 settled (metric SETTLED_CASH), so passing at threshold carries the target. Settlement: first Stripe payout 7-14 days after the first payment (~day 2-7) lands by day 21 at worst; no orders are taken after day 7, so nothing is counted that could settle late. Exposure: the writer is paid within 2 days after the Stripe payout under written terms secured before any order, so $0 is advanced against the $0 cap, and fulfilment is shown possible before buyers pay. Owner hours: 0.5 + 2.5 + 5 x 1 = 8 h <= 9 h (3 h/week x 3). Decisive links OFFER_AND_PRICE, CONVERSION, CURRENT_DEMAND are correct; no missing evidence is dressed as a constraint; the alternatives are rejected on their own records (clearance holds, Connects purchase, 9 h x $20-$50 < $1,500).",
+    "findings": [
+     "Gross vs net: at the threshold the account holds $1,500 on settlement but $700 after the writers' $800 is paid (within 2 days of payout, possibly day 22-23). The revision states this and that net would need 11 orders; the owner should be told plainly that 'in my account' is met only gross.",
+     "A 5% paid-order rate from one cold batch is a high bar; the stop is correct, but the owner should expect the likely outcome to be the stop branch and a longer window.",
+     "Writer delivery within 5 days of an order placed by day 7 completes by day 12, well before the day-21 payout bound."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:23:57.737Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I need $1,500 in my account within 21 days. I can't put any money in up front, and I only have about 3 hours a week to give it.",
+    "terms": "c02f65b32ffba0b8",
+    "openings": {
+     "cop_467db7644f1e4d1db134": "ba8748bf7a893c5d",
+     "cop_7f7ce1a008a040ed94cd": "8d5452d2681804b9",
+     "cop_bf8ba8a7420b49209f05": "08aca5de09891a02",
+     "cop_fad4e9c12fbf49fdbb60": "c9600b4b35639431"
+    }
+   },
+   "at": "2026-11-28T06:25:07.772Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

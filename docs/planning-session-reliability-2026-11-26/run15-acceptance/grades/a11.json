@@ -1,0 +1,41 @@
+{
+  "id": "av-11-welding-objective-narrowed",
+  "step": 1,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_c557f6cb593b_c1d25d",
+  "stance": "CONDITIONAL",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_a0b5ed71aac941298674/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no opening is startable: OFFER_AND_PRICE not established"
+  }
+}

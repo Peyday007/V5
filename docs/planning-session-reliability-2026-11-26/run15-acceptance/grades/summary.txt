@@ -1,0 +1,16 @@
+a01 av-01-winery-dtc-reports-executable step=0 pass=False outcome=None critical=[] e2e=False usable=False
+a02 av-02-vending-audit-price-only-said step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a03 av-03-plumbing-medgas-no-verifier step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a04 av-04-livestock-auction-one-sound step=0 pass=False outcome=None critical=['PAYER_POPULATION_INFLATED'] e2e=False usable=False
+a05 av-05-water-well-paid-net-45 step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a06 av-06-dry-cleaner-perc-owner-hours step=0 pass=False outcome=None critical=[] e2e=False usable=False
+a07 av-07-maple-label-price-contradicted step=1 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a08 av-08-yoga-owner-teaches-over-hours step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a09 av-09-propane-leak-checks-net step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a10 av-10-monument-list-market-too-small step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a11 av-11-welding-objective-narrowed step=1 pass=False outcome=None critical=[] e2e=False usable=False
+a12 av-12-museum-grant-as-price step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+d01 aw-01-small-target-owner-hours stance=NO_PLAN pass=False critical=False
+d02 aw-02-named-industry-trucking stance=NO_PLAN pass=True critical=False
+d03 aw-03-large-target-with-capital stance=NO_PLAN pass=True critical=False
+d04 aw-04-short-window-no-capital stance=CONDITIONAL pass=True critical=False
