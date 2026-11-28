@@ -166,6 +166,17 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     // the question is settled and the planner reruns on it.
     const good = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, method: 'state board directory read', claims: [{ claim: statement, sourceUrl: 'https://example.test/dental-board/directory', sourceTitle: 'Licensed practices', sourcePublisher: 'State Dental Board', sourceDate: '2026-10-01', evidenceExcerpt: statement, evidenceLocator: 'Directory summary, paragraph 1', primarySource: true }] });
     expect(good.claims[0]!.sourced).toBe(true);
+    // Production, 2026-11-28: a newer submission makes the older one's verification moot, so its item is cancelled; the
+    // new one rides a bin at the queue's top priority, where a live goal's bin leads its ties.
+    {
+      const { getDb } = await import('../server/db/database.ts');
+      const vid = (x: unknown) => (x as { verifyItem: { id: string } }).verifyItem.id;
+      const rows = await getDb().all<{ id: string; state: string; bin_id: string }>(`SELECT id, state, bin_id FROM work_items WHERE work_type = 'PLAN_VERIFY' AND id IN (?, ?)`, [vid(bad), vid(good)]);
+      expect(rows.find((r) => r.id === vid(bad))?.state).toBe('CANCELLED');
+      expect(rows.find((r) => r.id === vid(good))?.state).toBe('QUEUED');
+      const bin = await getDb().get<{ priority: number }>('SELECT priority FROM bins WHERE id = ?', [rows.find((r) => r.id === vid(good))!.bin_id]);
+      expect(bin?.priority).toBe(9);
+    }
     // Run 13 (fleet-2): a verdict keyed `claim_id`, or keyed to the claims of a submission since replaced, judged nothing
     // and the gate blocked the research. Each is refused, nothing is recorded, and the real verdict below still lands.
     await expect(svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claim_id: good.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, note: 'x' } as never], sufficiency: 'INSUFFICIENT' })).rejects.toThrow(/a verdict with no claimId.*nothing was recorded/);

@@ -713,7 +713,17 @@ async function requestVerification(goalId: string, projectId: string, needId: st
   const correlation = verifyCorrelation(needId, attempt);
   const existing = await getDb().get<{ id: string }>(`SELECT id FROM work_items WHERE project_id = ? AND work_type = ? AND correlation_id = ?`, [projectId, PLAN_VERIFY_WORK, correlation]);
   if (existing) return { id: existing.id, created: false };
-  const { enqueueWork } = await import('../../repos/workQueue.ts');
+  const { enqueueWork, cancelWork } = await import('../../repos/workQueue.ts');
+  /*
+   * A newer submission replaces the older ones' claims, so their verification is moot: a verdict on them is refused
+   * (verifyResearch) and the item would only be claimed and released again (production, 2026-11-28: four verify items
+   * for one question queued, each leased and released three times). They are cancelled with the reason.
+   */
+  const open = await getDb().all<{ id: string; payload: string }>(`SELECT id, payload FROM work_items WHERE project_id = ? AND work_type = ? AND state IN ('QUEUED', 'LEASED')`, [projectId, PLAN_VERIFY_WORK]);
+  for (const row of open) {
+    const p = (typeof row.payload === 'string' ? JSON.parse(row.payload || '{}') : (row.payload ?? {})) as { goalId?: string; needId?: string; attempt?: number };
+    if (p.goalId === goalId && p.needId === needId && (p.attempt ?? 0) < attempt) await cancelWork(row.id, `superseded by research attempt ${attempt} for ${needId}`);
+  }
   const binId = await reviewBin({ goalId, projectId, title: `Verify research ${needId} (attempt ${attempt})`, instructions: VERIFY_INSTRUCTIONS, independentOf: researcherPrincipal });
   const item = await enqueueWork({
     projectId,
@@ -1025,7 +1035,9 @@ async function reviewBin(input: { goalId: string; projectId: string; title: stri
     completionContract: 'PLAN_REVIEW_V1',
     workloadClass: 'RESEARCH_PLAN_REVIEW_V1',
     maxAttempts: 6,
-    priority: 8,
+    // The owner's session waits on this one item to publish (production, 2026-11-28: planning verify and review bins at 8,
+    // behind 150 routine bins at 9, sat queued for hours); the queue's ceiling, and a live goal's bin leads its ties.
+    priority: 9,
     ready: true,
     createdByType: 'SYSTEM',
     createdById: 'session-planning',
